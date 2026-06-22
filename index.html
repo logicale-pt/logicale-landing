@@ -5,6 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>LOGICALE — Automação com IA para PMEs · Grafite</title>
 <meta name="description" content="LOGICALE — automação com IA para tarefas internas repetitivas em PMEs portuguesas. Implementação, formação e manutenção. O Claude é sempre teu." />
+
+<!-- canonical + Open Graph + Twitter -->
+<link rel="canonical" href="https://www.logicale.pt/" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="LOGICALE" />
+<meta property="og:locale" content="pt_PT" />
+<meta property="og:url" content="https://www.logicale.pt/" />
+<meta property="og:title" content="LOGICALE — Automação com IA para o teu negócio" />
+<meta property="og:description" content="Identificamos as tarefas repetitivas que te roubam horas e construímos agentes que as tratam por ti. Para PMEs portuguesas." />
+<meta property="og:image" content="https://www.logicale.pt/assets/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="LOGICALE — Automação com IA para o teu negócio." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="LOGICALE — Automação com IA para o teu negócio" />
+<meta name="twitter:description" content="Identificamos as tarefas repetitivas que te roubam horas e construímos agentes que as tratam por ti. Para PMEs portuguesas." />
+<meta name="twitter:image" content="https://www.logicale.pt/assets/og-image.png" />
+<meta name="theme-color" content="#2F343C" />
+
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 26 L16 5 L26 26' fill='none' stroke='%23B5562F' stroke-width='4.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -289,6 +308,26 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
 @media (max-width: 560px) {
   .wrap { padding: 0 20px; }
   .chip-card { display: none; }
+  /* tighter hero on phones */
+  .hero { padding: 72px 0 16px; }
+  .hero h1 { font-size: clamp(33px, 9.2vw, 50px); max-width: 100%; }
+  .hero-sub { font-size: 16px; }
+  /* full-width stacked CTAs are easier to tap */
+  .hero-cta { flex-direction: column; align-items: stretch; gap: 10px; }
+  .hero-cta .btn { justify-content: center; width: 100%; }
+  .final .hero-cta .mailto { text-align: center; margin-top: 4px; }
+  /* keep the brand + WhatsApp button from crowding the bar */
+  .nav-in { height: 64px; }
+  .nav-actions .btn-sm { padding: 9px 13px; }
+  .ui-body { padding: 16px; }
+  .ui-row { padding: 11px 12px; }
+  .how-step, .why-card { padding: 22px; }
+  .section-head p, .why-lead { font-size: 16px; }
+}
+/* very small phones: shorten the nav WhatsApp label to the icon only */
+@media (max-width: 380px) {
+  .nav-actions .wa span { display: none; }
+  .nav-actions .wa { padding: 9px 11px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
