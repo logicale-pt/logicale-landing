@@ -24,14 +24,14 @@
 <meta name="twitter:image" content="https://www.logicale.pt/assets/og-image.png" />
 <meta name="theme-color" content="#2F343C" />
 
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 26 L16 5 L26 26' fill='none' stroke='%23B5562F' stroke-width='4.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 26 L16 5 L26 26' fill='none' stroke='%23C2693B' stroke-width='4.4' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 /* ==========================================================
    LOGICALE — self-contained landing page
-   Colorway A · Petróleo (deep teal + cream + copper accent)
+   Colorway · Grafite (charcoal blue + cream, sparing copper Λ accent)
    ========================================================== */
 
 /* ==COLORWAY:START== */
@@ -49,6 +49,9 @@
   --accent:    var(--text);
   --accent-2:  var(--text-2);
   --accent-soft: rgba(240,235,224,0.13);
+  /* sparing brand accent — copper Λ peak (matches favicon); used in very few spots */
+  --copper:      #C2693B;
+  --copper-soft: rgba(194,105,59,0.20);
   --on-accent: var(--bg);
   --aurora-1:  rgba(120,134,150,0.40);
   --aurora-2:  rgba(240,235,224,0.045);
@@ -74,6 +77,8 @@ body {
 img { display: block; max-width: 100%; }
 a { color: inherit; text-decoration: none; }
 ::selection { background: var(--accent-soft); }
+/* keyboard-only focus ring (no effect for mouse/touch users) */
+:focus-visible { outline: 2px solid var(--copper); outline-offset: 3px; }
 .wrap { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 32px; }
 
 /* ---------------- abstract background (aurora mesh + flow nodes) ---------------- */
@@ -121,7 +126,7 @@ canvas.flow { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 
 
 /* ---------------- brand wordmark ---------------- */
 .brand { display: inline-flex; align-items: center; gap: 11px; }
-.brand .lam { height: 22px; width: auto; color: var(--accent); flex: 0 0 auto; }
+.brand .lam { height: 22px; width: auto; color: var(--copper); flex: 0 0 auto; }
 .logo { display: inline-flex; align-items: baseline; font-size: 21px; font-weight: 700; letter-spacing: 0.01em; color: var(--text); }
 .logo .lam { height: 0.78em; transform: translateY(0.02em); margin: 0 0.5px; }
 
@@ -169,7 +174,7 @@ canvas.flow { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 
 }
 .ui-top { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .ui-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tone); }
-.ui-dot.live { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.ui-dot.live { background: var(--copper); box-shadow: 0 0 0 4px var(--copper-soft); }
 .ui-title { font-size: 13.5px; font-weight: 600; color: var(--text-2); margin-left: 4px; }
 .ui-body { padding: 20px 22px; display: grid; gap: 12px; }
 .ui-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
@@ -282,7 +287,7 @@ canvas.flow { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 
 footer { border-top: 1px solid var(--line); padding: 30px 0; }
 .foot-in { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13.5px; color: var(--text-3); }
 .foot-in .brand .logo { font-size: 16px; }
-.foot-in .brand .lam { color: var(--accent); }
+.foot-in .brand .lam { color: var(--copper); }
 .foot-right { display: flex; gap: 22px; align-items: center; }
 .foot-right a:hover { color: var(--text); }
 
@@ -346,7 +351,7 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
 .intro::before { content: ""; position: absolute; inset: 0;
   background: radial-gradient(48% 48% at 50% 46%, var(--accent-soft), transparent 70%); opacity: .8; }
 .intro-mark { width: 92px; height: 92px; position: relative; }
-.intro-mark path { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round;
+.intro-mark path { fill: none; stroke: var(--copper); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round;
   stroke-dasharray: 100; stroke-dashoffset: 100; animation: introDraw .8s cubic-bezier(.6,0,.2,1) .1s forwards; }
 @keyframes introDraw { to { stroke-dashoffset: 0; } }
 
