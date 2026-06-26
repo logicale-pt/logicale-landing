@@ -176,7 +176,7 @@ canvas.flow { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 
 .ex .lab { color: var(--accent); font-weight: 500; }
 .ex .caret { display: inline-block; width: 1.5px; height: 1.05em; transform: translateY(2px); background: var(--accent); margin-left: 2px; animation: blink 1.05s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
-.reassure { margin-top: 16px; font-size: 13.5px; color: var(--text-2); font-weight: 500; }
+.reassure { margin-top: 16px; font-size: 15.5px; color: var(--text-2); font-weight: 500; }
 
 /* ---------------- showcase (cards straddling hero → audience) ---------------- */
 .showcase { position: relative; margin: -40px auto 0; max-width: 940px; padding: 0 24px; z-index: 5; }
@@ -453,6 +453,123 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
   .intro-mark { width: 76px; height: 76px; }
 }
 </style>
+<style id="logicale-quiz">
+/* ===== Diagnóstico gratuito — multi-step modal ===== */
+.quiz-overlay {
+  position: fixed; inset: 0; z-index: 300; display: none; place-items: center; padding: 20px;
+  background: rgba(20,23,27,0.74); backdrop-filter: blur(8px);
+  opacity: 0; transition: opacity .25s ease;
+}
+.quiz-overlay.open { display: grid; }
+.quiz-overlay.show { opacity: 1; }
+
+.quiz {
+  position: relative; width: min(560px, 100%); max-height: min(90vh, 760px); overflow-y: auto;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 24px;
+  box-shadow: var(--shadow-lg); padding: 26px 28px 30px;
+  transform: translateY(14px) scale(.985); transition: transform .28s cubic-bezier(.2,.7,.2,1);
+}
+.quiz-overlay.show .quiz { transform: none; }
+
+.quiz-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; min-height: 30px; padding-right: 34px; }
+.quiz-back {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto;
+  background: transparent; border: 1px solid var(--line); color: var(--text-2); cursor: pointer;
+  border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 500;
+  transition: background .18s ease, color .18s ease, opacity .18s ease;
+}
+.quiz-back:hover { background: var(--surface); color: var(--text); }
+.quiz-back[hidden] { display: none; }
+.quiz-progress { flex: 1; height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.quiz-progress span { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--copper); transition: width .35s cubic-bezier(.2,.7,.2,1); }
+.quiz-progress[hidden] { display: none; }
+.quiz-count { flex: 0 0 auto; font-family: "Geist Mono", monospace; font-size: 12px; color: var(--text-3); }
+.quiz-count[hidden] { display: none; }
+.quiz-close {
+  position: absolute; top: 16px; right: 16px; z-index: 2; width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line);
+  color: var(--text-2); cursor: pointer; transition: background .18s ease, color .18s ease, transform .18s ease;
+}
+.quiz-close:hover { background: var(--surface-2); color: var(--text); transform: rotate(90deg); }
+.quiz-close svg { width: 16px; height: 16px; }
+
+.quiz-step { animation: qIn .32s cubic-bezier(.2,.7,.2,1); }
+@keyframes qIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.q-eyebrow { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--copper); font-weight: 500; }
+.q-title { font-size: clamp(22px, 4.4vw, 30px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; margin: 10px 0 4px; color: var(--text); }
+.q-sub { color: var(--text-2); font-size: 15px; margin: 8px 0 0; }
+.q-hint { color: var(--text-3); font-size: 13px; margin: 6px 0 0; font-family: "Geist Mono", monospace; }
+
+.q-options { display: grid; gap: 11px; margin: 24px 0 0; }
+.chip {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); color: var(--text); font: inherit;
+  font-size: 16px; font-weight: 500; border-radius: 14px; padding: 16px 18px;
+  transition: background .16s ease, border-color .16s ease, transform .14s ease;
+}
+.chip:hover { background: var(--surface-2); border-color: var(--accent-soft); transform: translateY(-1px); }
+.chip .box {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px; border: 1.6px solid var(--text-3);
+  display: grid; place-items: center; transition: background .16s ease, border-color .16s ease;
+}
+.chip .box svg { width: 14px; height: 14px; opacity: 0; transform: scale(.5); transition: opacity .16s ease, transform .16s ease; color: var(--on-accent); }
+.chip.round .box { border-radius: 50%; }
+.chip.is-selected { border-color: var(--copper); background: var(--copper-soft); }
+.chip.is-selected .box { background: var(--copper); border-color: var(--copper); }
+.chip.is-selected .box svg { opacity: 1; transform: none; }
+
+.quiz-foot { margin-top: 22px; display: flex; justify-content: flex-end; }
+.quiz-foot .btn { min-width: 130px; justify-content: center; }
+.quiz-foot .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
+
+/* result + capture */
+.q-result {
+  font-size: clamp(19px, 3.4vw, 24px); font-weight: 600; line-height: 1.28; letter-spacing: -0.01em;
+  color: var(--text); margin: 12px 0 0;
+}
+.q-result b { color: var(--copper); font-weight: 700; }
+.q-ask { font-size: clamp(18px, 3.2vw, 22px); font-weight: 600; line-height: 1.32; letter-spacing: -0.01em; color: var(--text); margin: 4px 0 0; }
+.q-ask b { color: var(--copper); font-weight: 700; }
+.q-other { margin-top: 14px; }
+.quiz-form { display: grid; gap: 12px; margin-top: 20px; }
+.quiz-field label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
+.quiz-field input {
+  width: 100%; background: var(--surface); border: 1px solid var(--line); color: var(--text);
+  font: inherit; font-size: 16px; border-radius: 12px; padding: 13px 15px; transition: border-color .16s ease, background .16s ease;
+}
+.quiz-field input::placeholder { color: var(--text-3); }
+.quiz-field input:focus { outline: none; border-color: var(--copper); background: var(--surface-2); }
+.quiz-field input[aria-invalid="true"] { border-color: #d9534f; }
+.q-error { color: #e88; font-size: 13px; margin: 2px 0 0; min-height: 0; }
+.quiz-form .btn { width: 100%; justify-content: center; margin-top: 6px; }
+.q-privacy { font-size: 12.5px; color: var(--text-3); text-align: center; margin: 12px 0 0; }
+
+/* thank you */
+.q-thanks { text-align: center; padding: 22px 0 8px; }
+.q-thanks .tick { width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%; display: grid; place-items: center; background: var(--copper-soft); color: var(--copper); }
+.q-thanks .tick svg { width: 30px; height: 30px; }
+.q-thanks h3 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+.q-thanks p { color: var(--text-2); font-size: 15.5px; margin: 0 auto; max-width: 36ch; }
+.q-thanks .btn { margin-top: 24px; justify-content: center; }
+
+/* intro screen */
+.q-intro { text-align: center; padding: 8px 0; }
+.q-intro .mark { width: 56px; height: 56px; margin: 0 auto 18px; }
+.q-intro .mark path { fill: none; stroke: var(--copper); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+.q-intro h3 { font-size: clamp(23px, 4.6vw, 30px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.16; margin: 0 auto; max-width: 18ch; }
+.q-intro p { color: var(--text-2); font-size: 15px; margin: 12px auto 0; max-width: 32ch; }
+.q-intro .btn { margin-top: 26px; min-width: 180px; justify-content: center; }
+
+@media (max-width: 560px) {
+  .quiz { padding: 22px 18px 24px; border-radius: 20px; max-height: 92vh; }
+  .chip { padding: 14px 15px; font-size: 15px; }
+  .q-options { gap: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .quiz-overlay, .quiz, .quiz-step, .quiz-progress span { transition: none !important; animation: none !important; }
+}
+</style>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -502,15 +619,13 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
       <span class="logo">LOGIC<svg class="lam" viewBox="0 0 20 24" aria-hidden="true"><path d="M2 22 L10 3 L18 22" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/></svg>LE</span>
     </a>
     <nav class="nav-links">
-      <a href="#como">Como funciona</a>
-      <a href="#construimos">O que faz</a>
-      <a href="#porque">Porquê</a>
+      <a href="#o-que-fazemos">O que fazemos</a>
+      <a href="#porque-nos">Porquê nós</a>
+      <a href="#quem-somos">Quem somos</a>
+      <a href="#contacta-nos" data-scroll-footer>Contacta-nos</a>
     </nav>
     <div class="nav-actions">
-      <a class="btn btn-pri btn-sm wa" href="https://wa.me/351934276896?text=Ol%C3%A1%21%20Vi%20o%20site%20da%20LOGICALE%20e%20gostava%20de%20marcar%20a%20conversa%20de%2030%20minutos." target="_blank" rel="noopener">
-        <svg class="wa-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M.06 24l1.69-6.16a11.87 11.87 0 01-1.59-5.95C.16 5.32 5.5 0 12.06 0a11.8 11.8 0 018.4 3.49 11.76 11.76 0 013.48 8.39c0 6.55-5.34 11.88-11.89 11.88a11.92 11.92 0 01-5.69-1.45L.06 24zM6.6 20.2c1.68.99 3.28 1.59 5.4 1.59 5.45 0 9.89-4.43 9.89-9.88 0-5.46-4.42-9.89-9.88-9.89C6.55 2.02 2.12 6.45 2.12 11.9c0 2.23.65 3.9 1.75 5.65l-1 3.65 3.73-.99zm11.4-5.05c-.07-.12-.27-.2-.57-.35-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2-1.42.25-.7.25-1.29.18-1.42z"/></svg>
-        <span>Falar no WhatsApp</span>
-      </a>
+      <button type="button" class="btn btn-pri btn-sm" data-open-quiz>Diagnóstico gratuito</button>
     </div>
   </div>
 </header>
@@ -525,13 +640,10 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
     <p class="hero-sub reveal">Identificamos as tarefas repetitivas que te roubam horas e construímos agentes que as tratam por ti. Simples, direto e sem complicações.</p>
     <div class="ex reveal" aria-hidden="true"><span class="lab">ex:</span><span id="typed"></span><span class="caret">&nbsp;</span></div>
     <div class="hero-cta reveal">
-      <a class="btn btn-pri wa" href="https://wa.me/351934276896?text=Ol%C3%A1%21%20Vi%20o%20site%20da%20LOGICALE%20e%20gostava%20de%20marcar%20a%20conversa%20de%2030%20minutos." target="_blank" rel="noopener">
-        <svg class="wa-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M.06 24l1.69-6.16a11.87 11.87 0 01-1.59-5.95C.16 5.32 5.5 0 12.06 0a11.8 11.8 0 018.4 3.49 11.76 11.76 0 013.48 8.39c0 6.55-5.34 11.88-11.89 11.88a11.92 11.92 0 01-5.69-1.45L.06 24zM6.6 20.2c1.68.99 3.28 1.59 5.4 1.59 5.45 0 9.89-4.43 9.89-9.88 0-5.46-4.42-9.89-9.88-9.89C6.55 2.02 2.12 6.45 2.12 11.9c0 2.23.65 3.9 1.75 5.65l-1 3.65 3.73-.99zm11.4-5.05c-.07-.12-.27-.2-.57-.35-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2-1.42.25-.7.25-1.29.18-1.42z"/></svg>
-        <span>Falar no WhatsApp</span>
-      </a>
-      <a class="btn btn-ghost" href="#como">Como funciona ↓</a>
+      <button type="button" class="btn btn-pri" data-open-quiz>Faz o diagnóstico gratuito</button>
+      <a class="btn btn-ghost" href="#o-que-fazemos">O que fazemos ↓</a>
     </div>
-    <div class="reassure reveal">30 minutos · Por videochamada · Sem compromisso</div>
+    <div class="reassure reveal">Descobre em 2 minutos como libertar horas do teu dia</div>
   </div>
 </section>
 
@@ -571,11 +683,11 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
   </div>
 </div>
 
-<!-- ============================ AUDIENCE ============================ -->
-<section class="section">
+<!-- ============================ O QUE FAZEMOS (audience) ============================ -->
+<section class="section" id="o-que-fazemos">
   <div class="wrap">
     <div class="section-head center reveal">
-      <span class="eyebrow">Para quem é</span>
+      <span class="eyebrow">O que fazemos</span>
       <h2 class="display two-tone"><span class="ghost">Feito para</span><span class="solid">empresas portuguesas.</span></h2>
     </div>
     <div class="aud-grid">
@@ -595,34 +707,6 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
         <p>Emails, reuniões, documentos repetitivos.</p>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ============================ HOW IT WORKS ============================ -->
-<section class="section" id="como">
-  <div class="wrap">
-    <div class="section-head center reveal">
-      <span class="eyebrow">O processo</span>
-      <h2 class="display two-tone"><span class="solid">Como funciona.</span></h2>
-    </div>
-    <div class="how-grid">
-      <div class="how-step reveal">
-        <div class="num">01</div>
-        <h3>Conversa exploratória</h3>
-        <p>30 min para perceber o teu dia-a-dia.</p>
-      </div>
-      <div class="how-step reveal">
-        <div class="num">02</div>
-        <h3>Proposta à medida</h3>
-        <p>1–3 automações com impacto real, com custo e tempo.</p>
-      </div>
-      <div class="how-step reveal">
-        <div class="num">03</div>
-        <h3>Setup e go-live</h3>
-        <p>Em dias, não meses. Testas antes de pagares.</p>
-      </div>
-    </div>
-    <p class="how-tagline reveal">Menos tarefas manuais. <em>Mais tempo para o que importa.</em></p>
   </div>
 </section>
 
@@ -667,11 +751,39 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
   </div>
 </section>
 
-<!-- ============================ WHY ============================ -->
-<section class="section" id="porque">
+<!-- ============================ HOW IT WORKS ============================ -->
+<section class="section" id="como">
+  <div class="wrap">
+    <div class="section-head center reveal">
+      <span class="eyebrow">O processo</span>
+      <h2 class="display two-tone"><span class="solid">Como funciona.</span></h2>
+    </div>
+    <div class="how-grid">
+      <div class="how-step reveal">
+        <div class="num">01</div>
+        <h3>Diagnóstico</h3>
+        <p>Em 2 min percebemos onde perdes tempo.</p>
+      </div>
+      <div class="how-step reveal">
+        <div class="num">02</div>
+        <h3>Proposta à medida</h3>
+        <p>1–3 automações com impacto real, com custo e tempo.</p>
+      </div>
+      <div class="how-step reveal">
+        <div class="num">03</div>
+        <h3>Setup e go-live</h3>
+        <p>Em dias, não meses. Testas antes de pagares.</p>
+      </div>
+    </div>
+    <p class="how-tagline reveal">Menos tarefas manuais. <em>Mais tempo para o que importa.</em></p>
+  </div>
+</section>
+
+<!-- ============================ PORQUÊ NÓS ============================ -->
+<section class="section" id="porque-nos">
   <div class="wrap">
     <div class="why-head reveal">
-      <span class="eyebrow">Porquê a LOGICALE</span>
+      <span class="eyebrow">Porquê nós</span>
       <p class="why-lead">A tecnologia está <b>finalmente boa o suficiente</b> para resolver problemas reais de pequenas empresas — não só das grandes.</p>
     </div>
     <div class="trust reveal">
@@ -683,6 +795,16 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
         <svg class="tk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 12l4 4 10-10"/></svg>
         <p>Tu testas antes de pagares. Sem fidelizações forçadas.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ QUEM SOMOS ============================ -->
+<section class="section" id="quem-somos">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Quem somos</span>
+      <h2 class="display two-tone"><span class="ghost">As pessoas</span><span class="solid">por trás da LOGICALE.</span></h2>
     </div>
     <div class="team-grid">
       <div class="why-card reveal">
@@ -709,13 +831,10 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
 <section class="final" id="contacto">
   <div class="wrap reveal">
     <span class="eyebrow">Vamos a isto</span>
-    <h2 class="display two-tone"><span class="ghost">Vamos falar</span><span class="solid">30 minutos.</span></h2>
-    <p>Só uma conversa sobre o teu dia.</p>
+    <h2 class="display two-tone"><span class="ghost">Faz o teu</span><span class="solid">diagnóstico gratuito.</span></h2>
+    <p>Em 2 minutos percebemos onde a automação encaixa no teu negócio.</p>
     <div class="hero-cta">
-      <a class="btn btn-pri wa" href="https://wa.me/351934276896?text=Ol%C3%A1%21%20Vi%20o%20site%20da%20LOGICALE%20e%20gostava%20de%20marcar%20a%20conversa%20de%2030%20minutos." target="_blank" rel="noopener">
-        <svg class="wa-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M.06 24l1.69-6.16a11.87 11.87 0 01-1.59-5.95C.16 5.32 5.5 0 12.06 0a11.8 11.8 0 018.4 3.49 11.76 11.76 0 013.48 8.39c0 6.55-5.34 11.88-11.89 11.88a11.92 11.92 0 01-5.69-1.45L.06 24zM6.6 20.2c1.68.99 3.28 1.59 5.4 1.59 5.45 0 9.89-4.43 9.89-9.88 0-5.46-4.42-9.89-9.88-9.89C6.55 2.02 2.12 6.45 2.12 11.9c0 2.23.65 3.9 1.75 5.65l-1 3.65 3.73-.99zm11.4-5.05c-.07-.12-.27-.2-.57-.35-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2-1.42.25-.7.25-1.29.18-1.42z"/></svg>
-        <span>Falar no WhatsApp</span>
-      </a>
+      <button type="button" class="btn btn-pri" data-open-quiz>Faz o diagnóstico gratuito</button>
       <a class="mailto" href="mailto:geral@logicale.pt">geral@logicale.pt</a>
     </div>
   </div>
@@ -724,17 +843,36 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
 </main>
 
 <!-- ============================ FOOTER ============================ -->
-<footer>
+<footer id="contacta-nos">
   <div class="wrap foot-in">
     <a class="brand" href="#top" aria-label="LOGICALE">
       <span class="logo">LOGIC<svg class="lam" viewBox="0 0 20 24" aria-hidden="true"><path d="M2 22 L10 3 L18 22" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/></svg>LE</span>
     </a>
     <span class="foot-right">
+      <a class="btn btn-pri btn-sm wa" href="https://wa.me/351934276896?text=Ol%C3%A1%21%20Vi%20o%20site%20da%20LOGICALE%20e%20gostava%20de%20saber%20mais." target="_blank" rel="noopener">
+        <svg class="wa-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M.06 24l1.69-6.16a11.87 11.87 0 01-1.59-5.95C.16 5.32 5.5 0 12.06 0a11.8 11.8 0 018.4 3.49 11.76 11.76 0 013.48 8.39c0 6.55-5.34 11.88-11.89 11.88a11.92 11.92 0 01-5.69-1.45L.06 24zM6.6 20.2c1.68.99 3.28 1.59 5.4 1.59 5.45 0 9.89-4.43 9.89-9.88 0-5.46-4.42-9.89-9.88-9.89C6.55 2.02 2.12 6.45 2.12 11.9c0 2.23.65 3.9 1.75 5.65l-1 3.65 3.73-.99zm11.4-5.05c-.07-.12-.27-.2-.57-.35-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2-1.42.25-.7.25-1.29.18-1.42z"/></svg>
+        <span>Falar no WhatsApp</span>
+      </a>
       <a href="mailto:geral@logicale.pt">geral@logicale.pt</a>
       <span>© 2026 LOGICALE</span>
     </span>
   </div>
 </footer>
+
+<!-- ============================ DIAGNÓSTICO GRATUITO (modal) ============================ -->
+<div class="quiz-overlay" id="quiz" role="dialog" aria-modal="true" aria-label="Diagnóstico gratuito">
+  <div class="quiz">
+    <button type="button" class="quiz-close" data-quiz-close aria-label="Fechar diagnóstico">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div class="quiz-bar">
+      <button type="button" class="quiz-back" data-quiz-back hidden>← Voltar</button>
+      <div class="quiz-progress" hidden aria-hidden="true"><span></span></div>
+      <span class="quiz-count" hidden></span>
+    </div>
+    <div class="quiz-body" id="quiz-body" aria-live="polite"></div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -940,6 +1078,465 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
       }
     });
   }
+})();
+</script>
+
+<!-- ============================ DIAGNÓSTICO GRATUITO — lógica ============================ -->
+<script src="assets/config.js"></script>
+<script>
+(function () {
+  var overlay = document.getElementById('quiz');
+  var body = document.getElementById('quiz-body');
+  if (!overlay || !body) return;
+
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var progressWrap = overlay.querySelector('.quiz-progress');
+  var progressBar = progressWrap.querySelector('span');
+  var countEl = overlay.querySelector('.quiz-count');
+  var backBtn = overlay.querySelector('[data-quiz-back]');
+
+  /* ---- questions ---- */
+  var QUESTIONS = [
+    { id: 'setor', q: 'Em que área trabalha a tua empresa?', options: [
+      { v: 'comercio_local', l: 'Comércio local' },
+      { v: 'servicos_profissionais', l: 'Serviços profissionais' },
+      { v: 'escritorio_admin', l: 'Escritório e administração' },
+      { v: 'saude_bemestar', l: 'Saúde e bem-estar' },
+      { v: 'outro', l: 'Outro', other: true }
+    ] },
+    { id: 'dimensao', q: 'Quantas pessoas são?', options: [
+      { v: 'so_eu', l: 'Só eu' },
+      { v: '2_5', l: '2–5' },
+      { v: '6_15', l: '6–15' },
+      { v: '15_mais', l: '15+' }
+    ] },
+    { id: 'tarefas', q: 'O que te rouba mais tempo?', multi: true, max: 3, hint: 'Escolhe até 3', options: [
+      { v: 'emails', l: 'Emails' },
+      { v: 'faturacao', l: 'Faturação e orçamentos' },
+      { v: 'agendamentos', l: 'Agendamentos' },
+      { v: 'documentos', l: 'Tratar documentos' },
+      { v: 'relatorios', l: 'Relatórios' },
+      { v: 'redes_sociais', l: 'Redes sociais' }
+    ] },
+    { id: 'tempo_perdido', q: 'Quanto tempo por dia se gasta nisso?', options: [
+      { v: 'menos_1h', l: 'Menos de 1h' },
+      { v: '1_2h', l: '1–2h' },
+      { v: '2_4h', l: '2–4h' },
+      { v: 'mais_4h', l: 'Mais de 4h' }
+    ] },
+    { id: 'quem_faz', q: 'Quem trata disso hoje?', options: [
+      { v: 'dono', l: 'Eu, o dono' },
+      { v: 'colaborador', l: 'Um colaborador' },
+      { v: 'ninguem', l: 'Ninguém, fica por fazer' }
+    ] },
+    { id: 'abertura', q: 'Já tentaste automatizar isto?', options: [
+      { v: 'nunca', l: 'Nunca' },
+      { v: 'nao_resultou', l: 'Tentei mas não resultou' },
+      { v: 'ja_uso', l: 'Já uso alguma coisa' }
+    ] }
+  ];
+  var TOTAL = QUESTIONS.length;
+  var OTHER_MAX = 40;
+
+  /* sector label for the engagement line */
+  var SETOR_LABEL = {
+    comercio_local: 'comércio local',
+    servicos_profissionais: 'serviços profissionais',
+    escritorio_admin: 'escritório e administração',
+    saude_bemestar: 'saúde e bem-estar'
+  };
+
+  /* ---- state ---- */
+  var answers = {};   // id -> value | [values]  (+ '<id>_texto' for free-text "Outro")
+  var pos = 0;        // 0 intro · 1..TOTAL questions · TOTAL+1 engagement · TOTAL+2 form · TOTAL+3 thanks
+  var lastFocus = null;
+  var focusOther = false;
+
+  /* ---- small DOM helpers ---- */
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt != null) n.textContent = txt;
+    return n;
+  }
+  function clear() { while (body.firstChild) body.removeChild(body.firstChild); }
+  function focusFirst() {
+    var f = body.querySelector('button, input, [href], select, textarea');
+    if (f) f.focus();
+  }
+
+  /* ---- chrome (progress / back) per screen ---- */
+  function setChrome(opts) {
+    if (opts.progress) {
+      progressWrap.hidden = false; countEl.hidden = true;
+      progressBar.style.width = (((pos) / TOTAL) * 100) + '%';
+    } else if (opts.full) {
+      progressWrap.hidden = false; countEl.hidden = true;
+      progressBar.style.width = '100%';
+    } else {
+      progressWrap.hidden = true; countEl.hidden = true;
+    }
+    backBtn.hidden = !opts.back;
+  }
+
+  /* ---- renderers ---- */
+  function renderIntro() {
+    setChrome({ back: false });
+    var box = el('div', 'quiz-step q-intro');
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'mark'); svg.setAttribute('viewBox', '0 0 80 80'); svg.setAttribute('aria-hidden', 'true');
+    var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', 'M12 66 L40 14 L68 66'); svg.appendChild(p);
+    box.appendChild(svg);
+    box.appendChild(el('h3', null, 'Descobre como podemos ajudar o teu negócio — em 2 minutos.'));
+    box.appendChild(el('p', null, 'São 6 perguntas rápidas, tudo a clicar. Sem compromisso.'));
+    var start = el('button', 'btn btn-pri', 'Começar');
+    start.type = 'button';
+    start.addEventListener('click', function () { go(1); });
+    box.appendChild(start);
+    body.appendChild(box);
+  }
+
+  function optByValue(Q, v) {
+    for (var i = 0; i < Q.options.length; i++) if (Q.options[i].v === v) return Q.options[i];
+    return null;
+  }
+
+  function renderQuestion(qi) {
+    var Q = QUESTIONS[qi];
+    setChrome({ progress: true, back: true });
+    var box = el('div', 'quiz-step');
+    box.appendChild(el('span', 'q-eyebrow', 'Pergunta ' + (qi + 1) + ' de ' + TOTAL));
+    box.appendChild(el('h2', 'q-title', Q.q));
+    if (Q.hint) box.appendChild(el('p', 'q-hint', Q.hint));
+
+    var opts = el('div', 'q-options');
+    var selected = Q.multi ? (answers[Q.id] || []) : answers[Q.id];
+
+    Q.options.forEach(function (o) {
+      var chip = el('button', 'chip' + (Q.multi ? '' : ' round'));
+      chip.type = 'button';
+      chip.setAttribute('role', Q.multi ? 'checkbox' : 'radio');
+      var on = Q.multi ? selected.indexOf(o.v) !== -1 : selected === o.v;
+      chip.setAttribute('aria-checked', on ? 'true' : 'false');
+      if (on) chip.classList.add('is-selected');
+
+      var box2 = el('span', 'box');
+      box2.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>';
+      chip.appendChild(box2);
+      chip.appendChild(el('span', 'lbl', o.l));
+
+      chip.addEventListener('click', function () {
+        if (Q.multi) {
+          var arr = answers[Q.id] || (answers[Q.id] = []);
+          var idx = arr.indexOf(o.v);
+          if (idx !== -1) { arr.splice(idx, 1); }
+          else { if (arr.length >= Q.max) return; arr.push(o.v); }
+          focusKeep(o.v);
+          render(); // re-render (clears body) to reflect selection + continue state
+        } else {
+          answers[Q.id] = o.v;
+          if (o.other) { focusOther = true; render(); }  // reveal the text field; don't auto-advance
+          else {
+            chip.classList.add('is-selected');
+            chip.setAttribute('aria-checked', 'true');
+            window.setTimeout(function () { go(pos + 1); }, reduce ? 0 : 220);
+          }
+        }
+      });
+      opts.appendChild(chip);
+    });
+    box.appendChild(opts);
+
+    // "Outro" → inline free-text field (single-choice only)
+    var sel = Q.multi ? null : optByValue(Q, answers[Q.id]);
+    var needsOther = !!(sel && sel.other);
+    if (needsOther) {
+      var fld = el('div', 'quiz-field q-other');
+      var lab = el('label', null, 'Qual?'); lab.setAttribute('for', 'q-other-input');
+      var inp = el('input'); inp.id = 'q-other-input'; inp.type = 'text';
+      inp.maxLength = OTHER_MAX; inp.placeholder = 'Escreve a tua área';
+      inp.value = answers[Q.id + '_texto'] || '';
+      inp.addEventListener('input', function () {
+        answers[Q.id + '_texto'] = inp.value;
+        var c = box.querySelector('.quiz-foot .btn');
+        if (c) c.disabled = !inp.value.trim();
+      });
+      inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && inp.value.trim()) { e.preventDefault(); go(pos + 1); }
+      });
+      fld.appendChild(lab); fld.appendChild(inp);
+      box.appendChild(fld);
+    }
+
+    if (Q.multi || needsOther) {
+      var foot = el('div', 'quiz-foot');
+      var cont = el('button', 'btn btn-pri', 'Continuar');
+      cont.type = 'button';
+      cont.disabled = Q.multi
+        ? !(answers[Q.id] && answers[Q.id].length)
+        : !(answers[Q.id + '_texto'] && answers[Q.id + '_texto'].trim());
+      cont.addEventListener('click', function () { go(pos + 1); });
+      foot.appendChild(cont);
+      box.appendChild(foot);
+    }
+    body.appendChild(box);
+  }
+
+  // keep focus on the chip just toggled (multi re-render)
+  var keepVal = null;
+  function focusKeep(v) { keepVal = v; }
+
+  function setorText() {
+    if (answers.setor === 'outro' && answers.setor_texto && answers.setor_texto.trim()) {
+      return { text: answers.setor_texto.trim(), known: true };
+    }
+    if (SETOR_LABEL[answers.setor]) return { text: SETOR_LABEL[answers.setor], known: true };
+    return { text: 'o teu negócio', known: false };
+  }
+
+  // engagement reveal (replaces the old question 7) — hooks the lead before asking for email
+  function renderEngagement() {
+    setChrome({ full: true, back: true });
+    var box = el('div', 'quiz-step');
+    box.appendChild(el('span', 'q-eyebrow', 'O teu diagnóstico'));
+
+    var s = setorText();
+    var res = el('p', 'q-result');
+    if (s.known) {
+      res.appendChild(document.createTextNode('Para quem trabalha em '));
+      res.appendChild(el('b', null, s.text));
+      res.appendChild(document.createTextNode(', há quase sempre '));
+    } else {
+      res.appendChild(document.createTextNode('Para '));
+      res.appendChild(el('b', null, s.text));
+      res.appendChild(document.createTextNode(', há quase sempre '));
+    }
+    res.appendChild(el('b', null, '2 a 3 automações simples'));
+    res.appendChild(document.createTextNode(' que tiram estas tarefas repetitivas das tuas mãos.'));
+    box.appendChild(res);
+
+    var foot = el('div', 'quiz-foot');
+    var cont = el('button', 'btn btn-pri', 'Quero saber quais');
+    cont.type = 'button';
+    cont.addEventListener('click', function () { go(pos + 1); });
+    foot.appendChild(cont);
+    box.appendChild(foot);
+    body.appendChild(box);
+  }
+
+  // final card — just the form, short, no fine print
+  function renderForm() {
+    setChrome({ full: true, back: true });
+    var box = el('div', 'quiz-step');
+    var ask = el('p', 'q-ask');
+    ask.appendChild(document.createTextNode('Deixa o teu email e dizemos-te exatamente onde a automação encaixa no teu negócio. '));
+    ask.appendChild(el('b', null, 'Sem spam.'));
+    box.appendChild(ask);
+
+    var form = el('form', 'quiz-form');
+    form.noValidate = true;
+
+    function field(name, label, type, ph, required) {
+      var wrap = el('div', 'quiz-field');
+      var id = 'q-' + name;
+      var lab = el('label', null, label); lab.setAttribute('for', id);
+      var inp = el('input'); inp.id = id; inp.name = name; inp.type = type;
+      inp.placeholder = ph; inp.autocomplete = type === 'email' ? 'email' : (name === 'nome' ? 'name' : 'organization');
+      if (required) inp.required = true;
+      wrap.appendChild(lab); wrap.appendChild(inp);
+      return { wrap: wrap, input: inp };
+    }
+    var fEmail = field('email', 'Email *', 'email', 'o-teu@email.pt', true);
+    var fNome = field('nome', 'Nome (opcional)', 'text', 'O teu nome', false);
+    var fEmpresa = field('empresa', 'Empresa (opcional)', 'text', 'Nome da empresa', false);
+    var err = el('p', 'q-error'); err.id = 'q-email-err'; err.setAttribute('role', 'alert');
+    fEmail.input.setAttribute('aria-describedby', 'q-email-err');
+
+    form.appendChild(fEmail.wrap);
+    form.appendChild(err);
+    form.appendChild(fNome.wrap);
+    form.appendChild(fEmpresa.wrap);
+
+    var submit = el('button', 'btn btn-pri', 'Enviar');
+    submit.type = 'submit';
+    form.appendChild(submit);
+
+    var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = fEmail.input.value.trim();
+      if (!EMAIL_RE.test(email)) {
+        err.textContent = 'Escreve um email válido.';
+        fEmail.input.setAttribute('aria-invalid', 'true');
+        fEmail.input.focus();
+        return;
+      }
+      err.textContent = '';
+      fEmail.input.removeAttribute('aria-invalid');
+      submit.disabled = true; submit.textContent = 'A enviar…';
+
+      var lead = buildLead(email, fNome.input.value.trim(), fEmpresa.input.value.trim());
+      submitLead(lead).then(function () {
+        go(TOTAL + 3);
+      }).catch(function () {
+        submit.disabled = false; submit.textContent = 'Enviar';
+        err.textContent = 'Não foi possível enviar. Tenta de novo.';
+      });
+    });
+
+    box.appendChild(form);
+    body.appendChild(box);
+  }
+
+  function renderThanks() {
+    setChrome({ back: false });
+    var box = el('div', 'quiz-step q-thanks');
+    var tick = el('div', 'tick');
+    tick.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>';
+    box.appendChild(tick);
+    box.appendChild(el('h3', null, 'Recebido!'));
+    box.appendChild(el('p', null, 'Entramos em contacto em breve.'));
+    var close = el('button', 'btn btn-ghost', 'Fechar');
+    close.type = 'button';
+    close.addEventListener('click', closeQuiz);
+    box.appendChild(close);
+    body.appendChild(box);
+  }
+
+  /* ---- lead build + submit ---- */
+  function buildLead(email, nome, empresa) {
+    return {
+      source: 'diagnostico',
+      setor: answers.setor || null,
+      dimensao: answers.dimensao || null,
+      tarefas: answers.tarefas || [],
+      tempo_perdido: answers.tempo_perdido || null,
+      quem_faz: answers.quem_faz || null,
+      abertura: answers.abertura || null,
+      intencao: answers.intencao || null,
+      respostas: answers,
+      nome: nome || null,
+      empresa: empresa || null,
+      email: email,
+      estado: 'novo'
+    };
+  }
+
+  function submitLead(lead) {
+    var cfg = window.LOGICALE_CONFIG || {};
+    if (cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY) {
+      return fetch(cfg.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': cfg.SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + cfg.SUPABASE_ANON_KEY,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(lead)
+      }).then(function (r) { if (!r.ok) throw new Error('supabase ' + r.status); return true; });
+    }
+    if (cfg.FORMSPREE_ENDPOINT) {
+      return fetch(cfg.FORMSPREE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(lead)
+      }).then(function (r) { if (!r.ok) throw new Error('formspree ' + r.status); return true; });
+    }
+    // TODO: configurar SUPABASE_URL+SUPABASE_ANON_KEY ou FORMSPREE_ENDPOINT em assets/config.js.
+    // Sem isso a lead NÃO é persistida — fica só registada na consola.
+    console.warn('[LOGICALE] Captura de leads não configurada — lead não persistida:', lead);
+    return Promise.resolve(false);
+  }
+
+  /* ---- navigation ---- */
+  function render() {
+    clear();
+    if (pos === 0) renderIntro();
+    else if (pos >= 1 && pos <= TOTAL) renderQuestion(pos - 1);
+    else if (pos === TOTAL + 1) renderEngagement();
+    else if (pos === TOTAL + 2) renderForm();
+    else renderThanks();
+
+    if (focusOther) { focusOther = false; var oi = body.querySelector('#q-other-input'); if (oi) { oi.focus(); return; } }
+    if (keepVal != null) { keepVal = null; focusFirstSelectedOr(); }
+    else { focusFirst(); }
+  }
+  function focusFirstSelectedOr() {
+    var sel = body.querySelector('.chip.is-selected') || body.querySelector('.chip');
+    if (sel) sel.focus();
+  }
+
+  function go(next) {
+    // guard: don't advance past a question without a valid answer
+    if (next > pos && pos >= 1 && pos <= TOTAL) {
+      var Q = QUESTIONS[pos - 1];
+      var a = answers[Q.id];
+      if (Q.multi ? !(a && a.length) : !a) return;
+      if (!Q.multi) {
+        var o = optByValue(Q, a);
+        if (o && o.other && !(answers[Q.id + '_texto'] && answers[Q.id + '_texto'].trim())) return;
+      }
+    }
+    pos = next;
+    render();
+  }
+
+  /* ---- open / close ---- */
+  function openQuiz() {
+    lastFocus = document.activeElement;
+    pos = 0; answers = {};
+    overlay.classList.add('open');
+    // force reflow then show for transition
+    void overlay.offsetWidth;
+    overlay.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    render();
+    document.addEventListener('keydown', onKey, true);
+  }
+  function closeQuiz() {
+    overlay.classList.remove('show');
+    document.removeEventListener('keydown', onKey, true);
+    document.body.style.overflow = '';
+    var done = function () {
+      overlay.classList.remove('open');
+      overlay.removeEventListener('transitionend', done);
+    };
+    if (reduce) done(); else overlay.addEventListener('transitionend', done);
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeQuiz(); return; }
+    if (e.key === 'Tab') {
+      var f = overlay.querySelectorAll('button, input, [href], select, textarea, [tabindex]:not([tabindex="-1"])');
+      f = Array.prototype.filter.call(f, function (n) { return !n.disabled && n.offsetParent !== null; });
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+
+  backBtn.addEventListener('click', function () {
+    if (pos > 0) { pos = pos - 1; render(); }
+  });
+  overlay.querySelector('[data-quiz-close]').addEventListener('click', closeQuiz);
+  overlay.addEventListener('mousedown', function (e) { if (e.target === overlay) closeQuiz(); });
+
+  /* ---- triggers ---- */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-open-quiz]'), function (btn) {
+    btn.addEventListener('click', function (e) { e.preventDefault(); openQuiz(); });
+  });
+
+  /* ---- "Contacta-nos" → smooth scroll to footer ---- */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-scroll-footer]'), function (a) {
+    a.addEventListener('click', function (e) {
+      var t = document.getElementById('contacta-nos');
+      if (t) { e.preventDefault(); t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }); }
+    });
+  });
 })();
 </script>
 
