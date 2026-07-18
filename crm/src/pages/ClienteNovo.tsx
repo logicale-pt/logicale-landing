@@ -105,7 +105,7 @@ export default function ClienteNovo() {
 
         <h2>Automações (mínimo 1)</h2>
         {drafts.map((d, i) => (
-          <div key={i} className="panel" style={{ background: 'var(--panel-2)', marginBottom: 10 }}>
+          <div key={i} className="panel" style={{ background: 'var(--bg)', marginBottom: 10 }}>
             <AutomacaoFields
               draft={d}
               onChange={(nd) => setDrafts((ds) => ds.map((x, j) => (j === i ? nd : x)))}

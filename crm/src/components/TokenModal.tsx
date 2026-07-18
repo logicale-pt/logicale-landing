@@ -10,8 +10,8 @@ export interface NovoToken {
 export default function TokenModal({ tokens, onClose }: { tokens: NovoToken[]; onClose: () => void }) {
   return (
     <Modal title="Tokens de ping — guarda-os agora">
-      <p className="small" style={{ color: 'var(--warn)' }}>
-        ⚠️ Estes tokens só são mostrados <b>uma vez</b> (guardamos apenas o hash). Copia o comando para o
+      <p className="small muted">
+        Estes tokens só são mostrados <b>uma vez</b> — guardamos apenas o hash. Copia o comando para o
         prompt do Cowork/Routine ou para o wrapper da VM antes de fechar.
       </p>
       {tokens.map((t) => (

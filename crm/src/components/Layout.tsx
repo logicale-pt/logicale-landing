@@ -4,6 +4,14 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { nameFromEmail } from '../lib/utils';
 import Logotype from './Logotype';
+import {
+  IconClientes,
+  IconDashboard,
+  IconFinanceiro,
+  IconKanban,
+  IconLeads,
+  IconMonitorizacao,
+} from './icons';
 
 /** Dispara refresh do badge de incidentes em todas as tabs. */
 export function notifyIncidentesChanged() {
@@ -32,12 +40,12 @@ export default function Layout({ session }: { session: Session }) {
   }, [refresh]);
 
   const tabs = [
-    { to: '/', label: 'Dashboard' },
-    { to: '/leads', label: 'Leads' },
-    { to: '/clientes', label: 'Clientes' },
-    { to: '/kanban', label: 'Kanban' },
-    { to: '/financeiro', label: 'Financeiro' },
-    { to: '/monitorizacao', label: 'Monitorização', badge: true },
+    { to: '/', label: 'Dashboard', icon: <IconDashboard /> },
+    { to: '/leads', label: 'Leads', icon: <IconLeads /> },
+    { to: '/clientes', label: 'Clientes', icon: <IconClientes /> },
+    { to: '/kanban', label: 'Kanban', icon: <IconKanban /> },
+    { to: '/financeiro', label: 'Financeiro', icon: <IconFinanceiro /> },
+    { to: '/monitorizacao', label: 'Monitorização', icon: <IconMonitorizacao />, badge: true },
   ];
 
   return (
@@ -50,6 +58,7 @@ export default function Layout({ session }: { session: Session }) {
         <nav>
           {tabs.map((t) => (
             <NavLink key={t.to} to={t.to} end={t.to === '/'}>
+              {t.icon}
               {t.label}
               {t.badge && abertos > 0 && <span className="badge">{abertos}</span>}
             </NavLink>
@@ -57,7 +66,7 @@ export default function Layout({ session }: { session: Session }) {
         </nav>
         <div className="user">
           <b>{nameFromEmail(session.user.email)}</b>
-          <button onClick={() => supabase.auth.signOut()}>Sair</button>
+          <button className="small" onClick={() => supabase.auth.signOut()}>Sair</button>
         </div>
       </aside>
       <main className="main">
