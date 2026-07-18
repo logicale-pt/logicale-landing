@@ -7,6 +7,7 @@ import Logotype from './Logotype';
 import {
   IconClientes,
   IconDashboard,
+  IconDefinicoes,
   IconFinanceiro,
   IconKanban,
   IconLeads,
@@ -64,6 +65,10 @@ export default function Layout({ session }: { session: Session }) {
             </NavLink>
           ))}
         </nav>
+        <NavLink to="/definicoes" style={{ marginBottom: 8 }} className="nav-settings">
+          <IconDefinicoes />
+          Definições
+        </NavLink>
         <div className="user">
           <b>{nameFromEmail(session.user.email)}</b>
           <button className="small" onClick={() => supabase.auth.signOut()}>Sair</button>

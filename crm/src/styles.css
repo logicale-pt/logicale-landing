@@ -11,6 +11,7 @@
   --hover: rgba(0, 0, 0, 0.025);
   --fill: rgba(0, 0, 0, 0.05);       /* botões secundários, pills */
   --fill-selected: rgba(0, 0, 0, 0.06);
+  --well: rgba(0, 0, 0, 0.03);       /* zonas rebaixadas (colunas kanban) */
 
   /* texto */
   --ink: #1d1d1f;
@@ -21,10 +22,10 @@
   --hairline: rgba(0, 0, 0, 0.08);
   --hairline-strong: rgba(0, 0, 0, 0.16);
 
-  /* accent único (UI) */
-  --accent: #0071e3;
-  --accent-hover: #0064ca;
-  --accent-soft: rgba(0, 113, 227, 0.12);
+  /* accent único (UI) — o cobre do Λ no logo */
+  --accent: #c2693b;
+  --accent-hover: #a85830;
+  --accent-soft: rgba(194, 105, 59, 0.14);
 
   /* semântica — APENAS estados (runs, pagamentos, incidentes, leads) */
   --ok: #1f8a3d;
@@ -32,8 +33,10 @@
   --warn: #c25e00;
   --neutral: #8e8e93;
 
-  /* marca — usado só no Λ do logotipo */
+  /* marca — o Λ do logotipo */
   --brand-copper: #c2693b;
+
+  color-scheme: light;
 
   /* forma e movimento */
   --radius: 8px;
@@ -46,6 +49,38 @@
   --fs-m: 15px;
   --fs-l: 17px;
   --fs-xl: 22px;
+}
+
+/* tema escuro (opt-in nas Definições; claro é o default) */
+:root[data-theme='dark'] {
+  --bg: #1c1c1e;
+  --surface: #2c2c2e;
+  --hover: rgba(255, 255, 255, 0.045);
+  --fill: rgba(255, 255, 255, 0.09);
+  --fill-selected: rgba(255, 255, 255, 0.11);
+  --well: rgba(255, 255, 255, 0.035);
+
+  --ink: #f5f5f7;
+  --muted: #98989d;
+  --muted-2: #7c7c80;
+
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairline-strong: rgba(255, 255, 255, 0.22);
+
+  --accent: #d9834f;
+  --accent-hover: #e39364;
+  --accent-soft: rgba(217, 131, 79, 0.18);
+
+  --ok: #46b768;
+  --erro: #ff453a;
+  --warn: #dd9235;
+  --neutral: #98989d;
+
+  --brand-copper: #d9834f;
+
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -80,15 +115,19 @@ h2 { font-size: var(--fs-s); font-weight: 600; color: var(--muted); margin: 28px
 .sidebar .brand .logotype { font-size: var(--fs-m); }
 .sidebar .brand small { display: block; margin-top: 1px; font-size: 11px; color: var(--muted-2); }
 .sidebar nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.sidebar nav a {
+.sidebar nav a,
+.sidebar a.nav-settings {
   display: flex; align-items: center; gap: 9px;
   padding: 7px 10px; border-radius: var(--radius);
   color: var(--muted); font-weight: 500; font-size: var(--fs-s);
   transition: background var(--t), color var(--t);
 }
-.sidebar nav a svg { flex: 0 0 auto; opacity: 0.85; }
-.sidebar nav a:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
-.sidebar nav a.active { background: var(--fill-selected); color: var(--ink); }
+.sidebar nav a svg,
+.sidebar a.nav-settings svg { flex: 0 0 auto; opacity: 0.85; }
+.sidebar nav a:hover,
+.sidebar a.nav-settings:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
+.sidebar nav a.active,
+.sidebar a.nav-settings.active { background: var(--fill-selected); color: var(--ink); }
 .sidebar .user {
   padding: 12px 10px 0; border-top: 1px solid var(--hairline);
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -208,7 +247,7 @@ tr.lead-detail td { background: var(--bg); padding: 14px 16px; }
 /* ---------- kanban ---------- */
 .kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: start; }
 .kanban .col {
-  background: rgba(0, 0, 0, 0.03); border: 1px solid var(--hairline);
+  background: var(--well); border: 1px solid var(--hairline);
   border-radius: var(--radius-lg); padding: 10px; min-height: 220px;
   transition: background var(--t), border-color var(--t);
 }
@@ -248,6 +287,12 @@ pre.token-box {
 
 .error-msg { color: var(--erro); font-size: var(--fs-s); margin-top: 8px; }
 .success-msg { color: var(--ok); font-size: var(--fs-s); }
+
+/* ---------- segmented control (aparência nas Definições) ---------- */
+.seg { display: inline-flex; background: var(--fill); border-radius: var(--radius); padding: 2px; gap: 2px; }
+.seg button { height: 28px; background: none; color: var(--muted); }
+.seg button:hover { background: var(--hover); }
+.seg button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

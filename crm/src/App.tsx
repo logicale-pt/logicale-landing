@@ -13,6 +13,7 @@ import Kanban from './pages/Kanban';
 import Financeiro from './pages/Financeiro';
 import Monitorizacao from './pages/Monitorizacao';
 import AutomacaoDetalhe from './pages/AutomacaoDetalhe';
+import Definicoes from './pages/Definicoes';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="financeiro" element={<Financeiro />} />
           <Route path="monitorizacao" element={<Monitorizacao session={session} />} />
           <Route path="monitorizacao/:id" element={<AutomacaoDetalhe />} />
+          <Route path="definicoes" element={<Definicoes session={session} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

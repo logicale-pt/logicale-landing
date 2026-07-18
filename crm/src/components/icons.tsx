@@ -65,3 +65,11 @@ export const IconMonitorizacao = () => (
     <path d="M1.5 8 H4.5 L6.5 3.5 L9.5 12.5 L11.5 8 H14.5" />
   </I>
 );
+
+export const IconDefinicoes = () => (
+  <I>
+    <path d="M1.5 4.5 H14.5 M1.5 11.5 H14.5" />
+    <circle cx="10.5" cy="4.5" r="1.8" fill="var(--bg)" />
+    <circle cx="5.5" cy="11.5" r="1.8" fill="var(--bg)" />
+  </I>
+);
