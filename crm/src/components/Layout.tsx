@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { nameFromEmail } from '../lib/utils';
+import Logotype from './Logotype';
 
 /** Dispara refresh do badge de incidentes em todas as tabs. */
 export function notifyIncidentesChanged() {
@@ -42,8 +43,8 @@ export default function Layout({ session }: { session: Session }) {
   return (
     <div className="app">
       <aside className="sidebar">
-        <div className="logo">
-          λ LogiCale
+        <div className="brand">
+          <Logotype />
           <small>backoffice</small>
         </div>
         <nav>
@@ -55,11 +56,8 @@ export default function Layout({ session }: { session: Session }) {
           ))}
         </nav>
         <div className="user">
-          {nameFromEmail(session.user.email)}
-          <br />
-          <button className="small" onClick={() => supabase.auth.signOut()}>
-            Sair
-          </button>
+          <b>{nameFromEmail(session.user.email)}</b>
+          <button onClick={() => supabase.auth.signOut()}>Sair</button>
         </div>
       </aside>
       <main className="main">

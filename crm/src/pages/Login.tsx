@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
+import Logotype from '../components/Logotype';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -20,7 +21,10 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <form className="login-box panel" onSubmit={onSubmit}>
-        <div className="logo">λ</div>
+        <div className="brand">
+          <Logotype />
+          <small>backoffice</small>
+        </div>
         <div className="field">
           <label>Email</label>
           <input

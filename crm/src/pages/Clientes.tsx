@@ -64,14 +64,35 @@ export default function Clientes() {
               <tr key={c.id} className="clickable" onClick={() => navigate(`/clientes/${c.id}`)}>
                 <td>{c.nome}</td>
                 <td>{c.empresa ?? '—'}</td>
-                <td>{c.email ?? '—'}</td>
-                <td>{c.telefone ?? '—'}</td>
+                <td>
+                  {c.email ? (
+                    <a href={`mailto:${c.email}`} onClick={(e) => e.stopPropagation()}>{c.email}</a>
+                  ) : '—'}
+                </td>
+                <td>
+                  {c.telefone ? (
+                    <a href={`tel:${c.telefone.replace(/\s/g, '')}`} onClick={(e) => e.stopPropagation()}>
+                      {c.telefone}
+                    </a>
+                  ) : '—'}
+                </td>
                 <td>{fmtEUR(mensalidades.get(c.id) ?? 0)}</td>
                 <td><span className={`tag ${c.estado}`}>{c.estado}</span></td>
               </tr>
             ))}
             {visiveis.length === 0 && (
-              <tr><td colSpan={6} className="muted">Sem clientes.</td></tr>
+              <tr>
+                <td colSpan={6}>
+                  <div className="empty">
+                    <p>{clientes.length === 0 ? 'Ainda não há clientes.' : 'Nenhum cliente corresponde à pesquisa.'}</p>
+                    {clientes.length === 0 && (
+                      <button className="primary" onClick={() => navigate('/clientes/novo')}>
+                        Criar o primeiro cliente
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

@@ -53,6 +53,23 @@ export default function Financeiro() {
     load();
   }
 
+  function exportarCSV() {
+    const esc = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const linhas = [
+      'mes;cliente;valor;estado;data_pagamento',
+      ...pagamentos.map((p) =>
+        [p.mes.slice(0, 7), esc(p.clientes?.nome ?? ''), String(p.valor).replace('.', ','), p.estado, p.data_pagamento ?? '']
+          .join(';'),
+      ),
+    ];
+    const blob = new Blob(['﻿' + linhas.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `pagamentos-logicale-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   async function mudarEstado(p: Pagamento, estado: PagamentoEstado) {
     await supabase
       .from('pagamentos')
@@ -140,6 +157,13 @@ export default function Financeiro() {
       </div>
 
       <h2>Histórico</h2>
+      <div className="toolbar">
+        <span className="muted small">{pagamentos.length} registos</span>
+        <div className="spacer" />
+        <button className="small" onClick={exportarCSV} disabled={pagamentos.length === 0}>
+          Exportar CSV
+        </button>
+      </div>
       <div className="panel" style={{ padding: 0 }}>
         <table>
           <thead>

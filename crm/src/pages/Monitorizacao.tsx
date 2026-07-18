@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { notifyIncidentesChanged } from '../components/Layout';
-import { fmtDateTime, nameFromEmail, proximoEsperado, scheduleLabel } from '../lib/utils';
+import { fmtDateTime, nameFromEmail, proximoEsperado, scheduleLabel, timeAgo } from '../lib/utils';
 import type { Automacao, Incidente, Run } from '../lib/types';
 import Modal from '../components/Modal';
 
@@ -16,6 +16,8 @@ type IncidenteRow = Incidente & {
 export default function Monitorizacao({ session }: { session: Session }) {
   const [automacoes, setAutomacoes] = useState<AutomacaoRow[]>([]);
   const [ultimas, setUltimas] = useState<Map<string, Run>>(new Map());
+  const [uptimes, setUptimes] = useState<Map<string, { ok: number; total: number }>>(new Map());
+  const [filtro, setFiltro] = useState<'todas' | 'problemas' | 'sem_runs'>('todas');
   const [incidentes, setIncidentes] = useState<IncidenteRow[]>([]);
   const [verResolvidos, setVerResolvidos] = useState(false);
   const [resolvendo, setResolvendo] = useState<IncidenteRow | null>(null);
@@ -36,19 +38,27 @@ export default function Monitorizacao({ session }: { session: Session }) {
     setAutomacoes(autosT);
     setIncidentes((incs as IncidenteRow[]) ?? []);
 
-    // última run por automação (escala de ferramenta interna: query única recente)
+    // últimas runs (30 dias) numa query só: última run + uptime por automação
     if (autosT.length) {
+      const desde = new Date(Date.now() - 30 * 86400_000).toISOString();
       const { data: runs } = await supabase
         .from('runs')
         .select('*')
         .in('automacao_id', autosT.map((a) => a.id))
+        .gte('started_at', desde)
         .order('started_at', { ascending: false })
-        .limit(500);
+        .limit(3000);
       const map = new Map<string, Run>();
+      const up = new Map<string, { ok: number; total: number }>();
       for (const r of (runs as Run[]) ?? []) {
         if (!map.has(r.automacao_id)) map.set(r.automacao_id, r);
+        const u = up.get(r.automacao_id) ?? { ok: 0, total: 0 };
+        u.total += 1;
+        if (r.estado === 'ok') u.ok += 1;
+        up.set(r.automacao_id, u);
       }
       setUltimas(map);
+      setUptimes(up);
     }
   }, []);
 
@@ -111,7 +121,7 @@ export default function Monitorizacao({ session }: { session: Session }) {
               </tr>
             ))}
             {abertos.length === 0 && (
-              <tr><td colSpan={8} className="muted">Sem incidentes abertos. 🎉</td></tr>
+              <tr><td colSpan={8} className="muted">Sem incidentes abertos.</td></tr>
             )}
           </tbody>
         </table>
@@ -144,15 +154,31 @@ export default function Monitorizacao({ session }: { session: Session }) {
       )}
 
       <h2>Automações ativas</h2>
+      <div className="toolbar">
+        <select value={filtro} onChange={(e) => setFiltro(e.target.value as typeof filtro)}>
+          <option value="todas">Todas</option>
+          <option value="problemas">Só com problemas</option>
+          <option value="sem_runs">Ainda sem runs</option>
+        </select>
+      </div>
       <div className="panel" style={{ padding: 0 }}>
         <table>
           <thead>
-            <tr><th></th><th>Automação</th><th>Cliente</th><th>Schedule</th><th>Última execução</th><th>Próximo esperado</th></tr>
+            <tr><th style={{ width: 28 }}></th><th>Automação</th><th>Cliente</th><th>Schedule</th><th>Última execução</th><th>Próximo esperado</th><th className="num">Uptime 30 d</th></tr>
           </thead>
           <tbody>
-            {automacoes.map((a) => {
+            {automacoes
+              .filter((a) => {
+                const ultima = ultimas.get(a.id);
+                if (filtro === 'problemas') return ultima != null && ultima.estado !== 'ok';
+                if (filtro === 'sem_runs') return ultima == null;
+                return true;
+              })
+              .map((a) => {
               const ultima = ultimas.get(a.id);
               const prox = proximoEsperado(a);
+              const up = uptimes.get(a.id);
+              const pct = up && up.total > 0 ? (up.ok / up.total) * 100 : null;
               return (
                 <tr key={a.id} className="clickable" onClick={() => navigate(`/monitorizacao/${a.id}`)}>
                   <td><span className={`dot ${ultima?.estado ?? 'none'}`} /></td>
@@ -163,20 +189,37 @@ export default function Monitorizacao({ session }: { session: Session }) {
                     {ultima ? (
                       <>
                         <span className={`tag ${ultima.estado}`}>{ultima.estado}</span>{' '}
-                        <span className="muted small">{fmtDateTime(ultima.started_at)}</span>
+                        <span className="muted small" title={fmtDateTime(ultima.started_at)}>
+                          {timeAgo(ultima.started_at)}
+                        </span>
                       </>
                     ) : (
                       <span className="muted">sem runs</span>
                     )}
                   </td>
                   <td className="muted small">{prox ? fmtDateTime(prox.toISOString()) : '—'}</td>
+                  <td className="num">
+                    {pct == null ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      <span className={pct >= 99 ? 'uptime-ok' : pct >= 90 ? 'uptime-warn' : 'uptime-bad'}>
+                        {pct.toFixed(pct === 100 ? 0 : 1)}%
+                      </span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
             {automacoes.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
-                  Sem automações ativas — cria-as na ficha do <Link to="/clientes">cliente</Link>.
+                <td colSpan={7}>
+                  <div className="empty">
+                    <p>Sem automações ativas.</p>
+                    <span className="muted small">
+                      Cria-as na ficha do <Link to="/clientes">cliente</Link> — cada uma recebe um token de
+                      ping para a monitorização.
+                    </span>
+                  </div>
                 </td>
               </tr>
             )}

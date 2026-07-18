@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { fmtDateTime, fmtEUR } from '../lib/utils';
+import { fmtDateTime, fmtEUR, timeAgo } from '../lib/utils';
 import type { Incidente, Mensalidade, Pagamento, Run } from '../lib/types';
 
 type IncidenteRow = Incidente & {
@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [incidentes, setIncidentes] = useState<IncidenteRow[]>([]);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [mrr, setMrr] = useState(0);
+  const [numClientes, setNumClientes] = useState<number | null>(null);
   const [atrasados, setAtrasados] = useState<PagamentoRow[]>([]);
 
   useEffect(() => {
@@ -41,8 +42,10 @@ export default function Dashboard() {
       ]);
       setIncidentes((inc.data as IncidenteRow[]) ?? []);
       setRuns((rn.data as RunRow[]) ?? []);
+      const mensT = (mens.data as Mensalidade[]) ?? [];
+      setNumClientes(mensT.length);
       setMrr(
-        ((mens.data as Mensalidade[]) ?? [])
+        mensT
           .filter((m) => m.cliente_estado === 'ativo')
           .reduce((s, m) => s + Number(m.mensalidade), 0),
       );
@@ -50,9 +53,22 @@ export default function Dashboard() {
     })();
   }, []);
 
+  const porEstado = (e: string) => runs.filter((r) => r.estado === e).length;
+
   return (
     <>
       <h1>Dashboard</h1>
+
+      {numClientes === 0 && (
+        <div className="panel" style={{ marginBottom: 14 }}>
+          <strong>Primeiros passos</strong>
+          <ol className="small" style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 2 }}>
+            <li><Link to="/clientes/novo">Cria o primeiro cliente</Link> com as automações dele — cada uma gera um token de ping.</li>
+            <li>Cola o comando curl no prompt da automação (Cowork/Routine) ou no wrapper da VM.</li>
+            <li>Acompanha as execuções na <Link to="/monitorizacao">Monitorização</Link> — erros e falhas criam incidentes aqui.</li>
+          </ol>
+        </div>
+      )}
 
       <div className="grid cols-4">
         <div className={`panel stat ${incidentes.length ? 'alert' : ''}`}>
@@ -65,7 +81,12 @@ export default function Dashboard() {
         </div>
         <div className="panel stat">
           <div className="num">{runs.length}</div>
-          <div className="lbl">Runs últimas 24h</div>
+          <div className="lbl">
+            Runs últimas 24 h
+            {runs.length > 0 && (
+              <span> — {porEstado('ok')} ok · {porEstado('erro')} erro · {porEstado('missed')} missed</span>
+            )}
+          </div>
         </div>
         <div className={`panel stat ${atrasados.length ? 'alert' : ''}`}>
           <div className="num">{atrasados.length}</div>
@@ -121,10 +142,10 @@ export default function Dashboard() {
         </>
       )}
 
-      <h2>Runs últimas 24h</h2>
+      <h2>Runs últimas 24 h</h2>
       <div className="panel" style={{ padding: 0 }}>
         {runs.length === 0 ? (
-          <p className="muted" style={{ padding: 12 }}>Sem runs nas últimas 24h.</p>
+          <p className="muted" style={{ padding: 12 }}>Sem runs nas últimas 24 horas.</p>
         ) : (
           <table>
             <thead>
@@ -133,7 +154,7 @@ export default function Dashboard() {
             <tbody>
               {runs.map((r) => (
                 <tr key={r.id}>
-                  <td>{fmtDateTime(r.started_at)}</td>
+                  <td title={fmtDateTime(r.started_at)}>{timeAgo(r.started_at)}</td>
                   <td>{r.automacoes?.clientes?.nome ?? '—'}</td>
                   <td>{r.automacoes?.nome ?? '—'}</td>
                   <td><span className={`tag ${r.estado}`}>{r.estado}</span></td>

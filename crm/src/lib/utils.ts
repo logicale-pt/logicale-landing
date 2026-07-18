@@ -54,6 +54,18 @@ export function fmtDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/** Tempo relativo curto: "agora", "há 5 min", "há 2 h", "ontem", ou data. */
+export function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return 'agora';
+  if (s < 3600) return `há ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `há ${Math.floor(s / 3600)} h`;
+  if (s < 172800) return 'ontem';
+  if (s < 7 * 86400) return `há ${Math.floor(s / 86400)} dias`;
+  return fmtDate(iso);
+}
+
 export function hora(h: string | null): string {
   return h ? h.slice(0, 5) : '—';
 }
