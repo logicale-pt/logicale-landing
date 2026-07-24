@@ -1192,7 +1192,10 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
     box.appendChild(el('p', null, 'São 6 perguntas rápidas, tudo a clicar. Sem compromisso.'));
     var start = el('button', 'btn btn-pri', 'Começar');
     start.type = 'button';
-    start.addEventListener('click', function () { go(1); });
+    start.addEventListener('click', function () {
+      if (!startedThisOpen) { startedThisOpen = true; track('quiz_started'); }
+      go(1);
+    });
     box.appendChild(start);
     body.appendChild(box);
   }
@@ -1404,6 +1407,27 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
     body.appendChild(box);
   }
 
+  /* ---- funnel tracking (tabela events na Supabase — ver supabase/events.sql) ---- */
+  var sid = Math.random().toString(36).slice(2) + Date.now().toString(36); // id anónimo da sessão, p/ ligar events → lead
+  var startedThisOpen = false;
+  function track(ev) {
+    var cfg = window.LOGICALE_CONFIG || {};
+    if (!(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY)) return;
+    try {
+      fetch(cfg.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/events', {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': cfg.SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + cfg.SUPABASE_ANON_KEY,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ event: ev, sid: sid, page: location.pathname })
+      }).catch(function () {});
+    } catch (e) { /* tracking nunca pode partir o quiz */ }
+  }
+
   /* ---- lead build + submit ---- */
   function buildLead(email, nome, empresa) {
     return {
@@ -1415,7 +1439,7 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
       quem_faz: answers.quem_faz || null,
       abertura: answers.abertura || null,
       intencao: answers.intencao || null,
-      respostas: answers,
+      respostas: Object.assign({}, answers, { sid: sid }),
       nome: nome || null,
       empresa: empresa || null,
       email: email,
@@ -1487,6 +1511,8 @@ footer { border-top: 1px solid var(--line); padding: 30px 0; }
   function openQuiz() {
     lastFocus = document.activeElement;
     pos = 0; answers = {};
+    startedThisOpen = false;
+    track('quiz_opened');
     overlay.classList.add('open');
     // force reflow then show for transition
     void overlay.offsetWidth;
