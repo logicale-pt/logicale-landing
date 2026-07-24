@@ -179,6 +179,8 @@ button:hover, .btn:hover { background: rgba(0, 0, 0, 0.08); }
 button.primary { background: var(--accent); color: #fff; }
 button.primary:hover { background: var(--accent-hover); }
 button.danger { background: var(--fill); color: var(--erro); }
+button.destructive { background: var(--erro); color: #fff; }
+button.destructive:hover { background: #b00011; }
 button.ghost { background: none; }
 button.ghost:hover { background: var(--hover); }
 button.small { height: 26px; padding: 0 10px; font-size: 12px; }
