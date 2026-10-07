@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Disallow: /crm/
+Disallow: /backoffice/
+Disallow: /supabase/
+Disallow: /design_handoff_landing_logicale/
 
 Sitemap: https://www.logicale.pt/sitemap.xml
