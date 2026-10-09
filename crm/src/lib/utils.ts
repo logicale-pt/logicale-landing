@@ -76,21 +76,65 @@ export const SCHEDULE_LABEL: Record<ScheduleTipo, string> = {
   diaria: 'diária',
   dias_uteis: 'dias úteis',
   semanal: 'semanal',
+  periodica: 'periódica',
   custom: 'custom',
 };
 
-export function scheduleLabel(a: Pick<Automacao, 'schedule_tipo' | 'hora_esperada' | 'dia_semana' | 'tolerancia_min'>): string {
+type ScheduleCampos = Pick<
+  Automacao,
+  'schedule_tipo' | 'hora_esperada' | 'dia_semana' | 'tolerancia_min' | 'intervalo_min' | 'janela_inicio' | 'janela_fim' | 'so_dias_uteis'
+>;
+
+/** 15 → "15 min", 60 → "1 h", 90 → "1h30". */
+export function fmtIntervalo(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h} h`;
+}
+
+function minutosDoDia(h: string | null, fallback: number): number {
+  if (!h) return fallback;
+  const [hh, mm] = h.split(':').map((n) => parseInt(n, 10));
+  return hh * 60 + mm;
+}
+
+export function scheduleLabel(a: ScheduleCampos): string {
   const base = SCHEDULE_LABEL[a.schedule_tipo];
   if (a.schedule_tipo === 'custom') return base;
+  if (a.schedule_tipo === 'periodica') {
+    const janela = a.janela_inicio || a.janela_fim ? ` · ${hora(a.janela_inicio ?? '00:00')}–${hora(a.janela_fim ?? '24:00')}` : '';
+    const dias = a.so_dias_uteis ? ' · dias úteis' : '';
+    return `a cada ${fmtIntervalo(a.intervalo_min ?? 0)}${janela}${dias} ±${a.tolerancia_min}min`;
+  }
   const dia = a.schedule_tipo === 'semanal' && a.dia_semana != null ? ` (${DIAS_SEMANA[a.dia_semana]})` : '';
   return `${base}${dia} às ${hora(a.hora_esperada)} ±${a.tolerancia_min}min`;
 }
 
 /** Próxima execução esperada (hora local — Portugal ⇒ Europe/Lisbon). */
-export function proximoEsperado(a: Pick<Automacao, 'schedule_tipo' | 'hora_esperada' | 'dia_semana' | 'ativa'>): Date | null {
-  if (!a.ativa || a.schedule_tipo === 'custom' || !a.hora_esperada) return null;
-  const [h, m] = a.hora_esperada.split(':').map((n) => parseInt(n, 10));
+export function proximoEsperado(a: Omit<ScheduleCampos, 'tolerancia_min'> & Pick<Automacao, 'ativa'>): Date | null {
+  if (!a.ativa || a.schedule_tipo === 'custom') return null;
   const now = new Date();
+
+  if (a.schedule_tipo === 'periodica') {
+    const passo = a.intervalo_min ?? 0;
+    if (passo <= 0) return null;
+    const ini = minutosDoDia(a.janela_inicio, 0);
+    const fim = minutosDoDia(a.janela_fim, 24 * 60 - 1); // janela inclui a hora de fim
+    for (let i = 0; i < 8; i++) {
+      const dia = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+      const dow = dia.getDay();
+      if (a.so_dias_uteis && (dow === 0 || dow === 6)) continue;
+      for (let t = ini; t <= fim; t += passo) {
+        const d = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), 0, t);
+        if (d > now) return d;
+      }
+    }
+    return null;
+  }
+
+  if (!a.hora_esperada) return null;
+  const [h, m] = a.hora_esperada.split(':').map((n) => parseInt(n, 10));
   for (let i = 0; i < 8; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, h, m, 0, 0);
     if (d <= now) continue;

@@ -1,6 +1,6 @@
 export type ClienteEstado = 'ativo' | 'inativo';
 export type TipoEntrega = 'cowork' | 'routine' | 'vm';
-export type ScheduleTipo = 'diaria' | 'dias_uteis' | 'semanal' | 'custom';
+export type ScheduleTipo = 'diaria' | 'dias_uteis' | 'semanal' | 'periodica' | 'custom';
 export type RunEstado = 'ok' | 'erro' | 'missed';
 export type IncidenteEstado = 'novo' | 'assumido' | 'resolvido';
 export type PagamentoEstado = 'pendente' | 'pago' | 'em_atraso';
@@ -28,6 +28,10 @@ export interface Automacao {
   schedule_tipo: ScheduleTipo;
   hora_esperada: string | null; // "HH:MM:SS"
   dia_semana: number | null; // 0=domingo … 6=sábado
+  intervalo_min: number | null; // periodica: minutos entre execuções
+  janela_inicio: string | null; // periodica: "HH:MM:SS", null = 00:00
+  janela_fim: string | null; // periodica: "HH:MM:SS", null = 24:00
+  so_dias_uteis: boolean; // periodica
   tolerancia_min: number;
   ativa: boolean;
   data_inicio: string;

@@ -101,3 +101,12 @@ Até isso estar feito, a aba mostra um aviso e o Dashboard mostra "—" nos cust
 ### 5.3 Desenvolver sem tocar em produção
 `cd crm && npm run dev:mock` → abre o backoffice com dados fictícios em memória e sessão falsa
 (sem login, sem pedidos à Supabase). O mock não entra no build (`npm run build`).
+
+## 6. Automações periódicas (out 2026)
+
+Schedule **Periódica**: um ping a cada N minutos (5–720), opcionalmente só numa janela horária (ex: 09:00–18:00) e só em dias úteis.
+
+1. **SQL Editor** → corre `supabase/migrations/20261009010000_automacoes_periodicas.sql` (só acrescenta colunas; tem de correr **antes** do deploy do backoffice, senão gravar automações falha).
+2. **Edge Functions → check-missed** → substitui o código pelo novo `supabase/functions/check-missed/index.ts` e faz deploy (manter "Enforce JWT verification" desligado).
+
+Deteção de missed: se passar a próxima execução esperada + tolerância sem ping → run `missed` + incidente + email. **Um só alerta por falha** — enquanto a última run for `missed` não volta a alertar; o primeiro ping novo rearma. Automações criadas hoje têm um ciclo de margem. O cron do check-missed corre de 15 em 15 min, por isso a deteção pode demorar até +15 min.
