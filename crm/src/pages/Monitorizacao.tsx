@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, tabelaEmFalta } from '../lib/supabase';
 import { notifyIncidentesChanged } from '../components/Layout';
 import { fmtDateTime, nameFromEmail, proximoEsperado, scheduleLabel, timeAgo } from '../lib/utils';
-import type { Automacao, Incidente, Run } from '../lib/types';
+import type { Automacao, AutomacaoSaude, Incidente, Run } from '../lib/types';
 import Modal from '../components/Modal';
 
 type AutomacaoRow = Automacao & { clientes: { nome: string } | null };
@@ -12,11 +12,55 @@ type IncidenteRow = Incidente & {
   clientes: { nome: string } | null;
   runs: { estado: string; mensagem: string | null; automacoes: { nome: string } | null } | null;
 };
+type Ultima = Pick<Run, 'estado' | 'started_at'>;
+type Uptime = { ok: number; total: number };
+type Saude = { ultimas: Map<string, Ultima>; uptimes: Map<string, Uptime> };
+
+/** Última execução + uptime 30 d por automação — calculado na BD (view automacoes_saude). */
+async function carregarSaude(ids: string[]): Promise<Saude> {
+  const { data, error } = await supabase.from('automacoes_saude').select('*').in('automacao_id', ids);
+  if (error) {
+    if (!tabelaEmFalta(error)) console.error('automacoes_saude:', error);
+    return carregarSaudeLegado(ids);
+  }
+  const ultimas = new Map<string, Ultima>();
+  const uptimes = new Map<string, Uptime>();
+  for (const s of (data as AutomacaoSaude[]) ?? []) {
+    if (s.ultima_estado && s.ultima_started_at) {
+      ultimas.set(s.automacao_id, { estado: s.ultima_estado, started_at: s.ultima_started_at });
+    }
+    const total = s.ok_30d + s.erro_30d + s.missed_30d;
+    if (total > 0) uptimes.set(s.automacao_id, { ok: s.ok_30d, total });
+  }
+  return { ultimas, uptimes };
+}
+
+/** Fallback enquanto a migração 20261010000000_runs_rollup.sql não corre (limitado a 1000 runs). */
+async function carregarSaudeLegado(ids: string[]): Promise<Saude> {
+  const desde = new Date(Date.now() - 30 * 86400_000).toISOString();
+  const { data: runs } = await supabase
+    .from('runs')
+    .select('automacao_id, estado, started_at')
+    .in('automacao_id', ids)
+    .gte('started_at', desde)
+    .order('started_at', { ascending: false })
+    .limit(3000);
+  const ultimas = new Map<string, Ultima>();
+  const uptimes = new Map<string, Uptime>();
+  for (const r of (runs as Pick<Run, 'automacao_id' | 'estado' | 'started_at'>[]) ?? []) {
+    if (!ultimas.has(r.automacao_id)) ultimas.set(r.automacao_id, r);
+    const u = uptimes.get(r.automacao_id) ?? { ok: 0, total: 0 };
+    u.total += 1;
+    if (r.estado === 'ok') u.ok += 1;
+    uptimes.set(r.automacao_id, u);
+  }
+  return { ultimas, uptimes };
+}
 
 export default function Monitorizacao({ session }: { session: Session }) {
   const [automacoes, setAutomacoes] = useState<AutomacaoRow[]>([]);
-  const [ultimas, setUltimas] = useState<Map<string, Run>>(new Map());
-  const [uptimes, setUptimes] = useState<Map<string, { ok: number; total: number }>>(new Map());
+  const [ultimas, setUltimas] = useState<Map<string, Ultima>>(new Map());
+  const [uptimes, setUptimes] = useState<Map<string, Uptime>>(new Map());
   const [filtro, setFiltro] = useState<'todas' | 'problemas' | 'sem_runs'>('todas');
   const [incidentes, setIncidentes] = useState<IncidenteRow[]>([]);
   const [verResolvidos, setVerResolvidos] = useState(false);
@@ -38,27 +82,10 @@ export default function Monitorizacao({ session }: { session: Session }) {
     setAutomacoes(autosT);
     setIncidentes((incs as IncidenteRow[]) ?? []);
 
-    // últimas runs (30 dias) numa query só: última run + uptime por automação
     if (autosT.length) {
-      const desde = new Date(Date.now() - 30 * 86400_000).toISOString();
-      const { data: runs } = await supabase
-        .from('runs')
-        .select('*')
-        .in('automacao_id', autosT.map((a) => a.id))
-        .gte('started_at', desde)
-        .order('started_at', { ascending: false })
-        .limit(3000);
-      const map = new Map<string, Run>();
-      const up = new Map<string, { ok: number; total: number }>();
-      for (const r of (runs as Run[]) ?? []) {
-        if (!map.has(r.automacao_id)) map.set(r.automacao_id, r);
-        const u = up.get(r.automacao_id) ?? { ok: 0, total: 0 };
-        u.total += 1;
-        if (r.estado === 'ok') u.ok += 1;
-        up.set(r.automacao_id, u);
-      }
-      setUltimas(map);
-      setUptimes(up);
+      const saude = await carregarSaude(autosT.map((a) => a.id));
+      setUltimas(saude.ultimas);
+      setUptimes(saude.uptimes);
     }
   }, []);
 

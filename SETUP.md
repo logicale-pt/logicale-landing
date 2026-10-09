@@ -110,3 +110,25 @@ Schedule **Periódica**: um ping a cada N minutos (5–720), opcionalmente só n
 2. **Edge Functions → check-missed** → substitui o código pelo novo `supabase/functions/check-missed/index.ts` e faz deploy (manter "Enforce JWT verification" desligado).
 
 Deteção de missed: se passar a próxima execução esperada + tolerância sem ping → run `missed` + incidente + email. **Um só alerta por falha** — enquanto a última run for `missed` não volta a alertar; o primeiro ping novo rearma. Automações criadas hoje têm um ciclo de margem. O cron do check-missed corre de 15 em 15 min, por isso a deteção pode demorar até +15 min.
+
+## 7. Histórico de runs — resumo diário e limpeza (out 2026)
+
+As automações periódicas geram muitas runs (uma de 15 em 15 min ≈ 100/dia). Para o backoffice não ter de puxar
+milhares de linhas (e não bater no limite de 1000 linhas da Supabase) e para a tabela `runs` não crescer sem fim:
+
+- **`runs_diarias`** — contadores por automação e dia (Lisboa): ok / erro / missed, duração total e custo total.
+  Um trigger atualiza-a a cada run nova; o SQL faz também o backfill das runs que já existem. Fica para sempre.
+- **View `automacoes_saude`** — última execução + ok/erro/missed dos últimos 30 dias de cada automação.
+  A Monitorização calcula daí o "Uptime 30 d" = ok / (ok + erro + missed).
+- **Limpeza diária** (`limpar_runs_antigas()`, pg_cron `crm-limpar-runs`, todos os dias às **03:30 UTC** — 04:30 em Lisboa no verão):
+  apaga runs **ok com mais de 30 dias**. Ficam sempre: runs `erro` e `missed`, runs com incidente e a última run de cada automação.
+  Os totais diários continuam em `runs_diarias` (a ficha da automação mostra os totais "desde o início").
+- O Dashboard passou a contar as "Runs últimas 24 h" no servidor (antes parava nas 50).
+
+### 7.1 SQL (uma vez)
+SQL Editor → cola e corre `supabase/migrations/20261010000000_runs_rollup.sql` (idempotente; não precisa de secrets).
+Verificar: `select jobname, schedule, active from cron.job;` deve listar `crm-limpar-runs`.
+
+Até isso estar feito, o backoffice usa o cálculo antigo no browser (últimas runs de 30 dias) — nada parte;
+só o uptime fica impreciso com mais de 1000 runs em 30 dias. Edge Functions não mudam: o `check-missed`
+só lê a última run e as runs das últimas 36 h, não é afetado pela limpeza.

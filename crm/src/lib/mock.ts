@@ -12,6 +12,34 @@ type DB = Record<string, Row[]>;
 const uid = () => crypto.randomUUID();
 const dias = (n: number) => new Date(Date.now() - n * 86400_000).toISOString();
 const dataISO = (n: number) => dias(n).slice(0, 10);
+const diaLisboa = (iso: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+
+/** Histórico realista (~900 runs): diária, dias úteis e periódica de 15 em 15 min (09–18h, dias úteis). */
+function historico(a1: string, a2: string, a4: string): Row[] {
+  const out: Row[] = [];
+  const agora = Date.now();
+  const run = (automacao_id: string, t: Date, estado: string, mensagem: string) => {
+    if (t.getTime() >= agora) return;
+    const iso = t.toISOString();
+    out.push({ id: uid(), automacao_id, estado, started_at: iso, duracao_seg: estado === 'missed' ? null : 20 + (out.length % 30), custo: estado === 'missed' ? null : 0.02, mensagem, created_at: iso });
+  };
+  for (let d = 1; d <= 60; d++) {
+    const dia = new Date(agora - d * 86400_000);
+    const util = dia.getDay() >= 1 && dia.getDay() <= 5;
+    run(a1, new Date(dia.setHours(18, 2, 0, 0)), d % 23 === 0 ? 'missed' : 'ok', 'lembretes enviados');
+    if (util) run(a2, new Date(dia.setHours(9, 5, 0, 0)), d % 17 === 0 ? 'erro' : 'ok', 'faturas processadas');
+  }
+  for (let d = 0; d < 30; d++) {
+    const dia = new Date(agora - d * 86400_000);
+    if (dia.getDay() === 0 || dia.getDay() === 6) continue;
+    for (let m = 9 * 60; m <= 18 * 60; m += 15) {
+      const i = out.length;
+      run(a4, new Date(dia.setHours(0, m, 0, 0)), i % 97 === 0 ? 'erro' : 'ok', i % 97 === 0 ? 'timeout na API da loja' : 'encomendas sincronizadas');
+    }
+  }
+  return out;
+}
 
 function seed(): DB {
   const c1 = uid(), c2 = uid(), c3 = uid(), c4 = uid();
@@ -37,6 +65,7 @@ function seed(): DB {
       { id: uid(), automacao_id: a1, estado: 'ok', started_at: dias(0.3), duracao_seg: 41, custo: 0.06, mensagem: '14 lembretes enviados', created_at: dias(0.3) },
       { id: uid(), automacao_id: a4, estado: 'ok', started_at: dias(0.5), duracao_seg: 22, custo: 0.03, mensagem: '3 follow-ups', created_at: dias(0.5) },
       { id: uid(), automacao_id: a3, estado: 'missed', started_at: dias(0.7), duracao_seg: null, custo: null, mensagem: 'sem ping na janela esperada', created_at: dias(0.7) },
+      ...historico(a1, a2, a4),
     ],
     incidentes: [
       { id: uid(), run_id: r1, cliente_id: c2, estado: 'novo', assignee: null, nota_resolucao: null, created_at: dias(0.1), resolved_at: null },
@@ -109,6 +138,44 @@ function mensalidades(db: DB): Row[] {
   }));
 }
 
+/** Na BD é uma tabela mantida por trigger; aqui deriva-se das runs. */
+function runsDiarias(db: DB): Row[] {
+  const porDia = new Map<string, Row>();
+  for (const r of db.runs) {
+    const dia = diaLisboa(String(r.started_at));
+    const k = `${r.automacao_id}|${dia}`;
+    const d = porDia.get(k) ?? { automacao_id: r.automacao_id, dia, ok: 0, erro: 0, missed: 0, duracao_total: 0, custo_total: 0 };
+    const estado = String(r.estado);
+    d[estado] = Number(d[estado]) + 1;
+    d.duracao_total = Number(d.duracao_total) + Number(r.duracao_seg ?? 0);
+    d.custo_total = Number(d.custo_total) + Number(r.custo ?? 0);
+    porDia.set(k, d);
+  }
+  return [...porDia.values()];
+}
+
+function automacoesSaude(db: DB): Row[] {
+  const desde = diaLisboa(dias(29));
+  const diarias = runsDiarias(db).filter((d) => String(d.dia) >= desde);
+  return db.automacoes.map((a) => {
+    const ultima = db.runs
+      .filter((r) => r.automacao_id === a.id)
+      .reduce<Row | null>((u, r) => (!u || String(r.started_at) > String(u.started_at) ? r : u), null);
+    const soma = (c: string) => diarias.filter((d) => d.automacao_id === a.id).reduce((s, d) => s + Number(d[c]), 0);
+    return {
+      automacao_id: a.id,
+      ultima_estado: ultima?.estado ?? null,
+      ultima_started_at: ultima?.started_at ?? null,
+      ok_30d: soma('ok'), erro_30d: soma('erro'), missed_30d: soma('missed'),
+    };
+  });
+}
+
+const VIEWS: Record<string, (db: DB) => Row[]> = { mensalidades, runs_diarias: runsDiarias, automacoes_saude: automacoesSaude };
+
+// simular migrações por correr: VITE_MOCK_SEM=runs_diarias,automacoes_saude npm run dev:mock
+const SEM_TABELA = new Set(String(import.meta.env.VITE_MOCK_SEM ?? '').split(',').filter(Boolean));
+
 type Filtro = (r: Row) => boolean;
 
 class Query implements PromiseLike<{ data: unknown; error: unknown; count?: number | null }> {
@@ -146,7 +213,10 @@ class Query implements PromiseLike<{ data: unknown; error: unknown; count?: numb
   maybeSingle() { this.um = 'maybe'; return this; }
 
   private executar(): { data: unknown; error: unknown; count?: number | null } {
-    const t = this.table === 'mensalidades' ? mensalidades(this.db) : (this.db[this.table] ??= []);
+    if (SEM_TABELA.has(this.table)) {
+      return { data: null, error: { code: 'PGRST205', message: `Could not find the table 'public.${this.table}' in the schema cache` } };
+    }
+    const t = VIEWS[this.table]?.(this.db) ?? (this.db[this.table] ??= []);
     const passa = (r: Row) => this.filtros.every((f) => f(r));
 
     if (this.modo === 'insert') {
@@ -173,8 +243,8 @@ class Query implements PromiseLike<{ data: unknown; error: unknown; count?: numb
         return (x < y ? -1 : x > y ? 1 : 0) * (o.asc ? 1 : -1);
       });
     }
+    const count = this.contar ? rows.length : null; // como no PostgREST: total antes do limit
     rows = rows.slice(0, this.lim).map((r) => embed(this.db, r, this.sel));
-    const count = this.contar ? rows.length : null;
     if (this.head) return { data: null, error: null, count };
     if (this.um) {
       if (!rows[0] && this.um === 'single') return { data: null, error: { code: 'PGRST116', message: 'no rows' } };

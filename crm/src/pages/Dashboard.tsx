@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, tabelaEmFalta } from '../lib/supabase';
 import { fmtDateTime, fmtEUR, monthISO, monthLabel, timeAgo } from '../lib/utils';
 import { custoRecorrenteMensal, somaMes } from '../lib/custos';
-import { ESPACO_INTERNO, tabelaEmFalta } from '../lib/espacos';
-import type { Cliente, Custo, Incidente, Mensalidade, Pagamento, Run } from '../lib/types';
+import { ESPACO_INTERNO } from '../lib/espacos';
+import type { Cliente, Custo, Incidente, Mensalidade, Pagamento, Run, RunEstado } from '../lib/types';
 import Donut, { dobrarFatias } from '../components/Donut';
 
 type IncidenteRow = Incidente & {
@@ -15,9 +15,22 @@ type RunRow = Run & { automacoes: { nome: string; clientes: { nome: string } | n
 type PagamentoRow = Pagamento & { clientes: { nome: string } | null };
 type Vista = 'cliente' | 'ferramenta';
 
+const ESTADOS_RUN: RunEstado[] = ['ok', 'erro', 'missed'];
+
+/** Nº de runs de um estado desde `desde` — count no servidor (a lista da tabela fica limitada a 50). */
+async function contarRuns(estado: RunEstado, desde: string): Promise<number> {
+  const { count } = await supabase
+    .from('runs')
+    .select('id', { count: 'exact', head: true })
+    .eq('estado', estado)
+    .gte('started_at', desde);
+  return count ?? 0;
+}
+
 export default function Dashboard() {
   const [incidentes, setIncidentes] = useState<IncidenteRow[]>([]);
   const [runs, setRuns] = useState<RunRow[]>([]);
+  const [runsPorEstado, setRunsPorEstado] = useState<Record<RunEstado, number>>({ ok: 0, erro: 0, missed: 0 });
   const [mrr, setMrr] = useState(0);
   const [numClientes, setNumClientes] = useState<number | null>(null);
   const [atrasados, setAtrasados] = useState<PagamentoRow[]>([]);
@@ -29,7 +42,7 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       const desde = new Date(Date.now() - 24 * 3600_000).toISOString();
-      const [inc, rn, mens, pag, cst, cls] = await Promise.all([
+      const [inc, rn, mens, pag, cst, cls, contagens] = await Promise.all([
         supabase
           .from('incidentes')
           .select('*, clientes(nome), runs(estado, mensagem, automacao_id, automacoes(nome))')
@@ -49,7 +62,9 @@ export default function Dashboard() {
           .order('mes', { ascending: false }),
         supabase.from('custos').select('*'),
         supabase.from('clientes').select('id, nome, created_at').order('created_at'),
+        Promise.all(ESTADOS_RUN.map((e) => contarRuns(e, desde))),
       ]);
+      setRunsPorEstado({ ok: contagens[0], erro: contagens[1], missed: contagens[2] });
       setCustos(tabelaEmFalta(cst.error) ? null : (cst.data as Custo[]) ?? []);
       setClientes((cls.data as Pick<Cliente, 'id' | 'nome' | 'created_at'>[]) ?? []);
       setIncidentes((inc.data as IncidenteRow[]) ?? []);
@@ -65,7 +80,7 @@ export default function Dashboard() {
     })();
   }, []);
 
-  const porEstado = (e: string) => runs.filter((r) => r.estado === e).length;
+  const totalRuns24h = runsPorEstado.ok + runsPorEstado.erro + runsPorEstado.missed;
 
   // custos: recorrente/mês é o número comparável ao MRR; pontuais do mês à parte
   const custoMensal = custos ? somaMes(custos, mes, true) : 0;
@@ -168,12 +183,12 @@ export default function Dashboard() {
         <div className="grid" style={{ alignContent: 'start' }}>
           <div className="panel stat">
             <div className="lbl">Runs últimas 24 h</div>
-            <div className="num">{runs.length}</div>
-            {runs.length > 0 && (
+            <div className="num">{totalRuns24h}</div>
+            {totalRuns24h > 0 && (
               <div className="run-mix">
-                <span><span className="dot ok" /> {porEstado('ok')} ok</span>
-                <span><span className="dot erro" /> {porEstado('erro')} erro</span>
-                <span><span className="dot missed" /> {porEstado('missed')} missed</span>
+                <span><span className="dot ok" /> {runsPorEstado.ok} ok</span>
+                <span><span className="dot erro" /> {runsPorEstado.erro} erro</span>
+                <span><span className="dot missed" /> {runsPorEstado.missed} missed</span>
               </div>
             )}
           </div>
@@ -233,7 +248,10 @@ export default function Dashboard() {
         </>
       )}
 
-      <h2>Runs últimas 24 h</h2>
+      <h2>
+        Runs últimas 24 h
+        {totalRuns24h > runs.length && <span className="muted small"> · {runs.length} mais recentes de {totalRuns24h}</span>}
+      </h2>
       <div className="panel" style={{ padding: 0 }}>
         {runs.length === 0 ? (
           <p className="muted" style={{ padding: 12 }}>Sem runs nas últimas 24 horas.</p>

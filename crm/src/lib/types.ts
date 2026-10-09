@@ -50,6 +50,27 @@ export interface Run {
   created_at: string;
 }
 
+/** Resumo diário (dia em Lisboa), mantido por trigger; sobrevive à limpeza das runs ok antigas. */
+export interface RunDiaria {
+  automacao_id: string;
+  dia: string; // date
+  ok: number;
+  erro: number;
+  missed: number;
+  duracao_total: number;
+  custo_total: number;
+}
+
+/** View automacoes_saude: última run + contagens dos últimos 30 dias, por automação. */
+export interface AutomacaoSaude {
+  automacao_id: string;
+  ultima_estado: RunEstado | null;
+  ultima_started_at: string | null;
+  ok_30d: number;
+  erro_30d: number;
+  missed_30d: number;
+}
+
 export interface Incidente {
   id: string;
   run_id: string;

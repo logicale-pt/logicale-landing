@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type PostgrestError } from '@supabase/supabase-js';
 
 // Anon key pública por design — a proteção real é Auth + RLS.
 export const SUPABASE_URL = 'https://kzioedpnfslvnniznasr.supabase.co';
@@ -10,3 +10,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 export const PING_URL = `${SUPABASE_URL}/functions/v1/ping`;
+
+/** A tabela/view ainda não existe (migração SQL por aplicar)? */
+export function tabelaEmFalta(error: PostgrestError | null): boolean {
+  if (!error) return false;
+  return error.code === 'PGRST205' || error.code === '42P01' || /does not exist|schema cache/i.test(error.message);
+}

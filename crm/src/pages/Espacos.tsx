@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, tabelaEmFalta } from '../lib/supabase';
 import { fmtEUR, monthISO, nameFromEmail } from '../lib/utils';
 import { custoRecorrenteMensal } from '../lib/custos';
-import { ESPACO_INTERNO, clienteIdDoEspaco, tabelaEmFalta } from '../lib/espacos';
+import { ESPACO_INTERNO, clienteIdDoEspaco } from '../lib/espacos';
 import type { Cliente, Custo } from '../lib/types';
 import NotasPanel from '../components/espacos/NotasPanel';
 import CustosPanel from '../components/espacos/CustosPanel';
