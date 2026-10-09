@@ -307,6 +307,7 @@ a:hover { color: var(--ink); }
 .q-input { width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: #FFFFFF; border: 0; box-shadow: inset 0 0 0 1px #D4CFC5; border-radius: 10px; padding: 12px 14px; outline: none; }
 .q-input.has-error { box-shadow: inset 0 0 0 1.5px #B4412F; }
 .q-input:focus { box-shadow: inset 0 0 0 2px var(--accent) !important; }
+.q-hp { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); opacity: 0; pointer-events: none; }
 .q-actions { margin-top: 22px; display: flex; justify-content: flex-end; }
 .q-next { min-width: 130px; border: 0; font: inherit; font-size: 15px; font-weight: 600; color: #FFFFFF; background: var(--ink); border-radius: 11px; padding: 12px 20px; cursor: pointer; }
 .q-next:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -1459,12 +1460,14 @@ a:hover { color: var(--ink); }
         '<p class="q-form-lead">Deixa o teu email e dizemos-te onde a automação encaixa no teu negócio. <span class="q-hl">Sem spam.</span></p>' +
         '<div class="q-fields">' +
           '<div><label for="q-email" class="q-field-label">Email *</label>' +
-          '<input id="q-email" class="q-input" type="email" autocomplete="email" placeholder="o-teu@email.pt">' +
+          '<input id="q-email" class="q-input" type="email" autocomplete="email" maxlength="254" placeholder="o-teu@email.pt">' +
           '<p role="alert" class="q-error" hidden></p></div>' +
           '<div><label for="q-nome" class="q-field-label">Nome <span>(opcional)</span></label>' +
-          '<input id="q-nome" class="q-input" type="text" autocomplete="name" placeholder="O teu nome"></div>' +
+          '<input id="q-nome" class="q-input" type="text" autocomplete="name" maxlength="200" placeholder="O teu nome"></div>' +
+          // honeypot: invisível para pessoas (e fora do Tab); bots que preenchem tudo denunciam-se
+          '<div class="q-hp" aria-hidden="true"><label for="q-website">Não preencher</label><input id="q-website" type="text" tabindex="-1" autocomplete="off"></div>' +
           '<div><label for="q-empresa" class="q-field-label">Empresa <span>(opcional)</span></label>' +
-          '<input id="q-empresa" class="q-input" type="text" autocomplete="organization" placeholder="Nome da empresa"></div>' +
+          '<input id="q-empresa" class="q-input" type="text" autocomplete="organization" maxlength="200" placeholder="Nome da empresa"></div>' +
           '<button type="submit" class="btn-dark q-submit">Enviar</button>' +
         '</div>');
       f.noValidate = true;
@@ -1482,6 +1485,7 @@ a:hover { color: var(--ink); }
       f.addEventListener('submit', function (e) {
         e.preventDefault();
         if (st.submitting) return;
+        if (f.querySelector('#q-website').value) { st.pos = T + 3; render(); return; } // bot: finge sucesso, não envia
         var mail = st.email.trim();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) { setError('Escreve um email válido.'); return; }
         setError('');

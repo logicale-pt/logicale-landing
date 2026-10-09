@@ -2,14 +2,19 @@
 // Chamada pelo pg_cron a cada 15 min via pg_net (deploy com "Verify JWT" DESLIGADO;
 // auth própria: header x-cron-secret tem de bater certo com o secret CRON_SECRET).
 //
-// Diária / dias úteis / semanal: horário + tolerância já passou SEM run registada
-// hoje → cria run `missed` + incidente + email (exceto se foi criada hoje depois
-// da hora esperada, ou se data_inicio ainda é futura). Idempotente: a própria run `missed`
-// conta como "run de hoje", não duplica.
+// Diária / dias úteis / semanal: cada ocorrência (dia D às hora_esperada, Lisboa) tem um
+// prazo = hora esperada + tolerância, que pode cair já no dia seguinte (ex: 23:30 ± 60 →
+// 00:30). Passado o prazo sem run desde o fim do prazo anterior → run `missed` + incidente
+// + email (exceto se a automação foi criada depois da hora esperada, ou se data_inicio
+// ainda é futura). Idempotente: a run `missed` fica com started_at = hora esperada e
+// conta como run dessa ocorrência, não duplica.
 // Periódica (a cada N min, opcionalmente só numa janela horária / dias úteis):
 // passou a próxima execução esperada + tolerância sem run → `missed`. Um só alerta
 // por falha: enquanto a última run for `missed` (hoje) não volta a alertar; a
 // primeira run nova (ok/erro) rearma a verificação.
+// Heartbeat: no fim de cada execução bem-sucedida grava heartbeats('check-missed') — o
+// backoffice mostra um aviso se ficar parado — e, se HEARTBEAT_URL existir, pinga-o
+// (ex: healthchecks.io), que avisa por email se deixar de receber pings.
 // Timezone: Europe/Lisbon (comparações feitas em hora local de Lisboa).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -20,6 +25,8 @@ const supabase = createClient(
 );
 
 const TZ = "Europe/Lisbon";
+const MIN = 60_000;
+const DIA_MIN = 24 * 60;
 
 interface Automacao {
   id: string;
@@ -55,6 +62,31 @@ function lisbonNow(now = new Date()): { dateStr: string; minutesOfDay: number; d
   };
 }
 
+/** Instante UTC de "dia + minutos do dia" em hora de Lisboa (respeita a mudança de hora). */
+function lisbonToUtc(dateStr: string, minutes: number): Date {
+  const [y, m, d] = dateStr.split("-").map((n) => parseInt(n, 10));
+  const relogio = Date.UTC(y, m - 1, d, 0, minutes); // o relógio de Lisboa lido como se fosse UTC
+  const offset = (t: number) => {
+    const l = lisbonNow(new Date(t));
+    const [ly, lm, ld] = l.dateStr.split("-").map((n) => parseInt(n, 10));
+    return Date.UTC(ly, lm - 1, ld, 0, l.minutesOfDay) - Math.floor(t / MIN) * MIN;
+  };
+  let t = relogio - offset(relogio);
+  t = relogio - offset(t); // 2.ª passagem: acerta quando o offset muda entre as duas leituras
+  return new Date(t);
+}
+
+/** "YYYY-MM-DD" do dia anterior. */
+function diaAnterior(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function dowDe(dateStr: string): number {
+  return new Date(`${dateStr}T12:00:00Z`).getUTCDay();
+}
+
 function toMin(h: string): number {
   const [hh, mm] = h.split(":").map((n) => parseInt(n, 10));
   return hh * 60 + mm;
@@ -62,6 +94,21 @@ function toMin(h: string): number {
 
 function fmtMin(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+}
+
+/** Escapa texto para HTML (nomes e mensagens vêm de fora: pings, nomes de clientes). */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+/** Comparação em tempo constante (compara os SHA-256, que têm sempre o mesmo tamanho). */
+async function iguais(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [x, y] = await Promise.all([a, b].map((s) => crypto.subtle.digest("SHA-256", enc.encode(s))));
+  const u = new Uint8Array(x), v = new Uint8Array(y);
+  let dif = 0;
+  for (let i = 0; i < u.length; i++) dif |= u[i] ^ v[i];
+  return dif === 0;
 }
 
 /**
@@ -102,20 +149,46 @@ async function periodicMissedAt(a: Automacao, today: string, nowMin: number, dow
   return nowMin > expected + a.tolerancia_min ? expected : null;
 }
 
-/** Data (YYYY-MM-DD) de um instante UTC, vista de Lisboa. */
-function lisbonDateOf(isoUtc: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(new Date(isoUtc));
-}
-
-function dueToday(a: Automacao, dow: number): boolean {
+function dueOn(a: Automacao, dow: number): boolean {
   switch (a.schedule_tipo) {
     case "diaria": return true;
     case "dias_uteis": return dow >= 1 && dow <= 5;
     case "semanal": return a.dia_semana === dow;
-    default: return false; // custom: sem schedule fixo, não é auto-verificada
+    default: return false; // periodica/custom: tratadas à parte / sem verificação
   }
+}
+
+/**
+ * Diária / dias úteis / semanal: ocorrência (dia + hora esperada) cujo prazo já passou sem run,
+ * ou null. Vê a ocorrência de hoje e a de ontem — a de ontem só interessa se o prazo dela
+ * passou a meia-noite (ex: 23:30 ± 60 → prazo 00:30 de hoje).
+ */
+async function diariaMissed(a: Automacao, hoje: string, agora: Date): Promise<{ dia: string; esperado: Date } | null> {
+  if (!a.hora_esperada) return null;
+  const ontem = diaAnterior(hoje);
+  for (const dia of [ontem, hoje]) {
+    if (dia < a.data_inicio || !dueOn(a, dowDe(dia))) continue;
+    const esperado = lisbonToUtc(dia, toMin(a.hora_esperada));
+    const prazo = new Date(esperado.getTime() + a.tolerancia_min * MIN);
+    if (agora <= prazo) continue; // ainda dentro da tolerância
+    if (dia === ontem && lisbonNow(prazo).dateStr !== hoje) continue; // prazo foi ontem → já tratada ontem
+    if (new Date(a.created_at) > esperado) continue; // criada depois da hora → 1.ª execução é a próxima
+
+    // Runs desta ocorrência = desde o fim do prazo anterior (prazo − 24 h, nunca antes da meia-noite
+    // do dia D) até agora. Inclui runs atrasadas e a própria run `missed` (started_at = esperado).
+    const desde = new Date(Math.max(lisbonToUtc(dia, 0).getTime(), prazo.getTime() - DIA_MIN * MIN));
+    const { count, error } = await supabase
+      .from("runs")
+      .select("id", { count: "exact", head: true })
+      .eq("automacao_id", a.id)
+      .gte("started_at", desde.toISOString());
+    if (error) {
+      console.error(`query runs falhou (${a.id}):`, error);
+      continue;
+    }
+    if ((count ?? 0) === 0) return { dia, esperado };
+  }
+  return null;
 }
 
 async function sendAlertEmail(subject: string, html: string): Promise<void> {
@@ -135,14 +208,11 @@ async function sendAlertEmail(subject: string, html: string): Promise<void> {
   if (!res.ok) console.error("Resend falhou:", res.status, await res.text());
 }
 
-/** Cria run `missed` (started_at = hora esperada de hoje, Lisboa) + incidente + email. */
-async function registarMissed(
-  a: Automacao, expectedMin: number, nowMin: number, mensagem: string, esperadaHtml: string,
-): Promise<boolean> {
-  const startedAt = new Date(Date.now() - (nowMin - expectedMin) * 60_000).toISOString();
+/** Cria run `missed` (started_at = hora esperada) + incidente + email. */
+async function registarMissed(a: Automacao, startedAt: Date, mensagem: string, esperada: string): Promise<boolean> {
   const { data: run, error: runErr } = await supabase
     .from("runs")
-    .insert({ automacao_id: a.id, estado: "missed", started_at: startedAt, mensagem })
+    .insert({ automacao_id: a.id, estado: "missed", started_at: startedAt.toISOString(), mensagem })
     .select("id")
     .single();
   if (runErr || !run) {
@@ -161,23 +231,41 @@ async function registarMissed(
     ? `${a.clientes.nome}${a.clientes.empresa ? ` (${a.clientes.empresa})` : ""}`
     : "?";
   await sendAlertEmail(
-    `⚠️ MISSED: ${a.nome} — ${clienteLabel}`,
+    `⚠️ MISSED: ${a.nome} — ${clienteLabel}`.replace(/[\r\n]+/g, " "),
     `<h2>Automação não correu</h2>
-     <p><b>Cliente:</b> ${clienteLabel}</p>
-     <p><b>Automação:</b> ${a.nome}</p>
-     <p><b>Esperada:</b> ${esperadaHtml}</p>
+     <p><b>Cliente:</b> ${escapeHtml(clienteLabel)}</p>
+     <p><b>Automação:</b> ${escapeHtml(a.nome)}</p>
+     <p><b>Esperada:</b> ${escapeHtml(esperada)}</p>
      <p>Incidente criado — assumir no backoffice: https://www.logicale.pt/backoffice/</p>`,
   );
   return true;
 }
 
+/** Heartbeat: grava na BD (aviso no backoffice) e pinga HEARTBEAT_URL (/fail em caso de erro). */
+async function heartbeat(ok: boolean, detalhe: Record<string, unknown>): Promise<void> {
+  if (ok) {
+    const { error } = await supabase
+      .from("heartbeats")
+      .upsert({ nome: "check-missed", ultimo_ok: new Date().toISOString(), detalhe });
+    if (error) console.error("heartbeat (BD) falhou:", error);
+  }
+  const url = Deno.env.get("HEARTBEAT_URL");
+  if (!url) return;
+  try {
+    await fetch(ok ? url : `${url.replace(/\/+$/, "")}/fail`, { method: "POST", body: JSON.stringify(detalhe) });
+  } catch (e) {
+    console.error("heartbeat (HEARTBEAT_URL) falhou:", e);
+  }
+}
+
 Deno.serve(async (req) => {
   const secret = Deno.env.get("CRON_SECRET");
-  if (!secret || req.headers.get("x-cron-secret") !== secret) {
+  if (!secret || !(await iguais(req.headers.get("x-cron-secret") ?? "", secret))) {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
   }
 
-  const { dateStr: today, minutesOfDay: nowMin, dow } = lisbonNow();
+  const agora = new Date();
+  const { dateStr: today, minutesOfDay: nowMin, dow } = lisbonNow(agora);
 
   const { data: automacoes, error: autoErr } = await supabase
     .from("automacoes")
@@ -186,55 +274,35 @@ Deno.serve(async (req) => {
     .neq("schedule_tipo", "custom");
   if (autoErr) {
     console.error("query automacoes falhou:", autoErr);
+    await heartbeat(false, { erro: autoErr.message });
     return new Response(JSON.stringify({ error: "internal" }), { status: 500 });
   }
 
   const missed: string[] = [];
 
   for (const a of (automacoes ?? []) as unknown as Automacao[]) {
-    if (a.data_inicio > today) continue; // ainda não começou
-
     if (a.schedule_tipo === "periodica") {
+      if (a.data_inicio > today) continue; // ainda não começou
       const expectedMin = await periodicMissedAt(a, today, nowMin, dow);
       if (expectedMin === null) continue;
-      if (await registarMissed(a, expectedMin, nowMin,
+      if (await registarMissed(a, lisbonToUtc(today, expectedMin),
         `Sem ping desde as ${fmtMin(expectedMin)} (a cada ${a.intervalo_min} min + ${a.tolerancia_min} min de tolerância, ${today})`,
         `hoje às ${fmtMin(expectedMin)} — periódica a cada ${a.intervalo_min} min (tolerância ${a.tolerancia_min} min, ${TZ})`,
       )) missed.push(a.id);
       continue;
     }
 
-    if (!dueToday(a, dow) || !a.hora_esperada) continue;
-
-    const expectedMin = toMin(a.hora_esperada);
-    // Nota: se hora_esperada + tolerância passar da meia-noite, o miss só seria
-    // detetável no dia seguinte — evita-se tolerâncias tão largas.
-    const deadlineMin = expectedMin + a.tolerancia_min;
-    if (nowMin <= deadlineMin) continue; // ainda dentro da janela
-
-    // Criada hoje depois da hora esperada → a 1.ª execução é só na próxima ocorrência
-    const criada = lisbonNow(new Date(a.created_at));
-    if (criada.dateStr === today && criada.minutesOfDay > expectedMin) continue;
-
-    // Já houve run hoje (Lisboa)? Inclui runs `missed` → idempotência.
-    const since = new Date(Date.now() - 36 * 3600_000).toISOString();
-    const { data: recentRuns, error: runsErr } = await supabase
-      .from("runs")
-      .select("id, started_at")
-      .eq("automacao_id", a.id)
-      .gte("started_at", since);
-    if (runsErr) {
-      console.error(`query runs falhou (${a.id}):`, runsErr);
-      continue;
-    }
-    const hasRunToday = (recentRuns ?? []).some((r) => lisbonDateOf(r.started_at) === today);
-    if (hasRunToday) continue;
-
-    if (await registarMissed(a, expectedMin, nowMin,
-      `Sem ping até ${a.hora_esperada.slice(0, 5)} + ${a.tolerancia_min} min (${today})`,
-      `hoje às ${a.hora_esperada.slice(0, 5)} (tolerância ${a.tolerancia_min} min, ${TZ})`,
+    const falha = await diariaMissed(a, today, agora);
+    if (!falha) continue;
+    const hora = a.hora_esperada!.slice(0, 5);
+    const quando = falha.dia === today ? "hoje" : `ontem (${falha.dia})`;
+    if (await registarMissed(a, falha.esperado,
+      `Sem ping até ${hora} + ${a.tolerancia_min} min (${falha.dia})`,
+      `${quando} às ${hora} (tolerância ${a.tolerancia_min} min, ${TZ})`,
     )) missed.push(a.id);
   }
+
+  await heartbeat(true, { checked: automacoes?.length ?? 0, missed: missed.length });
 
   return new Response(JSON.stringify({ ok: true, checked: automacoes?.length ?? 0, missed }), {
     status: 200,

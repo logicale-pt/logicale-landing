@@ -48,6 +48,8 @@ function seed(): DB {
   const mes = new Date();
   const mesISO = `${mes.getFullYear()}-${String(mes.getMonth() + 1).padStart(2, '0')}-01`;
   return {
+    // check-missed a reportar há 5 min (para ver o aviso "monitorização parada": VITE_MOCK_HB_PARADO=1)
+    heartbeats: [{ nome: 'check-missed', ultimo_ok: dias(import.meta.env.VITE_MOCK_HB_PARADO === '1' ? 1 : 5 / 1440), detalhe: null }],
     clientes: [
       { id: c1, nome: 'Clínica Sorriso', empresa: 'Sorriso Lda', email: 'geral@sorriso.pt', telefone: '912 345 678', notas: null, estado: 'ativo', created_at: dias(120) },
       { id: c2, nome: 'Contas Certas', empresa: 'Gabinete Contas Certas', email: 'info@contascertas.pt', telefone: null, notas: null, estado: 'ativo', created_at: dias(80) },
@@ -205,6 +207,7 @@ class Query implements PromiseLike<{ data: unknown; error: unknown; count?: numb
   eq(c: string, v: unknown) { this.filtros.push((r) => r[c] === v); return this; }
   neq(c: string, v: unknown) { this.filtros.push((r) => r[c] !== v); return this; }
   is(c: string, v: null) { this.filtros.push((r) => r[c] == v); return this; }
+  not(c: string, op: 'is', v: null) { if (op === 'is') this.filtros.push((r) => r[c] != v); return this; }
   in(c: string, vs: unknown[]) { this.filtros.push((r) => vs.includes(r[c])); return this; }
   gte(c: string, v: string) { this.filtros.push((r) => String(r[c]) >= v); return this; }
   order(col: string, o?: { ascending?: boolean }) { this.ordens.push({ col, asc: o?.ascending !== false }); return this; }

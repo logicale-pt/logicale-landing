@@ -70,17 +70,16 @@ export default function Monitorizacao({ session }: { session: Session }) {
   const eu = nameFromEmail(session.user.email);
 
   const load = useCallback(async () => {
-    const [{ data: autos }, { data: incs }] = await Promise.all([
+    // abertos: todos (têm de poder ser assumidos/resolvidos); resolvidos: só os 100 mais recentes
+    const sel = '*, clientes(nome), runs(estado, mensagem, automacoes(nome))';
+    const [{ data: autos }, { data: abertos }, { data: resolvidos }] = await Promise.all([
       supabase.from('automacoes').select('*, clientes(nome)').eq('ativa', true).order('nome'),
-      supabase
-        .from('incidentes')
-        .select('*, clientes(nome), runs(estado, mensagem, automacoes(nome))')
-        .order('created_at', { ascending: false })
-        .limit(100),
+      supabase.from('incidentes').select(sel).neq('estado', 'resolvido').order('created_at', { ascending: false }),
+      supabase.from('incidentes').select(sel).eq('estado', 'resolvido').order('created_at', { ascending: false }).limit(100),
     ]);
     const autosT = (autos as AutomacaoRow[]) ?? [];
     setAutomacoes(autosT);
-    setIncidentes((incs as IncidenteRow[]) ?? []);
+    setIncidentes([...((abertos as IncidenteRow[]) ?? []), ...((resolvidos as IncidenteRow[]) ?? [])]);
 
     if (autosT.length) {
       const saude = await carregarSaude(autosT.map((a) => a.id));
@@ -155,7 +154,7 @@ export default function Monitorizacao({ session }: { session: Session }) {
       </div>
       <p className="small">
         <button className="small" onClick={() => setVerResolvidos((v) => !v)}>
-          {verResolvidos ? 'esconder resolvidos' : `ver resolvidos (${resolvidos.length})`}
+          {verResolvidos ? 'esconder resolvidos' : `ver resolvidos (${resolvidos.length === 100 ? '100 mais recentes' : resolvidos.length})`}
         </button>
       </p>
       {verResolvidos && (

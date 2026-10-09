@@ -131,4 +131,25 @@ Verificar: `select jobname, schedule, active from cron.job;` deve listar `crm-li
 
 Até isso estar feito, o backoffice usa o cálculo antigo no browser (últimas runs de 30 dias) — nada parte;
 só o uptime fica impreciso com mais de 1000 runs em 30 dias. Edge Functions não mudam: o `check-missed`
-só lê a última run e as runs das últimas 36 h, não é afetado pela limpeza.
+só lê a última run e as runs do último dia, não é afetado pela limpeza.
+
+## 8. Correções do audit (out 2026) — ver [AUDIT.md](AUDIT.md)
+
+Ordem do deploy (cada passo funciona sozinho; nada parte se ficar a meio):
+
+1. **SQL Editor** → corre `supabase/migrations/20261011000000_audit_fixes.sql` (idempotente; não mexe em dados).
+   Cria `heartbeats`, limita o que a anon key pode escrever em `leads`/`events`, tira update/delete do `cofre`,
+   põe `runs_diarias` só de leitura e torna `token_hash` único (se houver duplicados avisa e salta esse passo).
+2. **Edge Functions** → substitui o código de `check-missed` e de `ping` pelos novos `index.ts` e faz deploy
+   (manter "Enforce JWT verification" desligado).
+3. **Heartbeat externo (recomendado, grátis)**: cria um check em [healthchecks.io](https://healthchecks.io)
+   com período 15 min e tolerância 15 min, e mete o URL de ping no secret **`HEARTBEAT_URL`** das Edge Functions.
+   Se o `check-missed` parar (secret do cron errado, deploy partido, erro), o healthchecks envia email.
+   Sem isto, o aviso fica só no backoffice (banner "Monitorização parada" quando o último heartbeat tem > 35 min).
+4. **Backoffice e landing** → `git push` (o build em `backoffice/` já está atualizado).
+
+Verificar:
+- `select * from public.heartbeats;` → `ultimo_ok` atualiza de 15 em 15 min.
+- `select status_code, count(*) from net._http_response where created > now() - interval '1 day' group by 1;` → só 200.
+- Repor o cofre (se alguma vez for preciso) passa a exigir SQL como `postgres` — de propósito: um cofre novo
+  deixa ilegíveis as credenciais cifradas com o antigo.

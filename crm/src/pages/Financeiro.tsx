@@ -42,7 +42,9 @@ export default function Financeiro() {
 
   // Regista com snapshot do valor (editável antes de registar)
   async function registar(m: Mensalidade, estado: PagamentoEstado) {
-    const valor = parseFloat(valores[m.cliente_id] ?? '') || Number(m.mensalidade);
+    // campo vazio → mensalidade atual; 0 é um valor válido (mês oferecido)
+    const escrito = (valores[m.cliente_id] ?? '').trim();
+    const valor = escrito !== '' && Number.isFinite(parseFloat(escrito)) ? parseFloat(escrito) : Number(m.mensalidade);
     await supabase.from('pagamentos').insert({
       cliente_id: m.cliente_id,
       mes,
@@ -54,7 +56,11 @@ export default function Financeiro() {
   }
 
   function exportarCSV() {
-    const esc = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    // ' à frente de = + - @ (tab, CR): o Excel não avalia como fórmula (nomes podem vir de leads públicas)
+    const esc = (v: string) => {
+      const t = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+      return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    };
     const linhas = [
       'mes;cliente;valor;estado;data_pagamento',
       ...pagamentos.map((p) =>

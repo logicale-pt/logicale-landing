@@ -3,7 +3,9 @@
 //   Authorization: Bearer <token-da-automacao>
 //   Body: { estado: "ok"|"erro", duracao_seg?, custo?, mensagem? }
 // Valida o token contra automacoes.token_hash (SHA-256), insere a run;
-// se erro → cria incidente + email de alerta (Resend, se RESEND_API_KEY existir).
+// se erro → cria incidente + email de alerta (Resend, se RESEND_API_KEY existir) — mas só se
+// a automação ainda não tiver um incidente aberto (um erro repetido de 5 em 5 min não gera
+// 100 emails; volta a alertar depois de o incidente ser resolvido).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -19,6 +21,11 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+/** Escapa texto para HTML (mensagem e nomes vêm de fora — ex: tracebacks com `<module>`). */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
 async function sendAlertEmail(subject: string, html: string): Promise<void> {
@@ -69,6 +76,9 @@ Deno.serve(async (req) => {
   } catch {
     return json(400, { error: "invalid JSON body" });
   }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return json(400, { error: "body must be a JSON object" });
+  }
 
   const estado = body.estado;
   if (estado !== "ok" && estado !== "erro") {
@@ -105,6 +115,16 @@ Deno.serve(async (req) => {
   }
 
   if (estado === "erro") {
+    // Já há incidente aberto (novo/assumido) desta automação? Então a run fica no histórico,
+    // mas não se cria outro incidente nem outro email.
+    const { count: abertos, error: abErr } = await supabase
+      .from("incidentes")
+      .select("id, runs!inner(automacao_id)", { count: "exact", head: true })
+      .neq("estado", "resolvido")
+      .eq("runs.automacao_id", auto.id);
+    if (abErr) console.error("query incidentes abertos falhou:", abErr); // na dúvida, alerta
+    if (!abErr && (abertos ?? 0) > 0) return json(200, { ok: true, run_id: run.id, incidente: "já aberto" });
+
     const { error: incErr } = await supabase.from("incidentes").insert({
       run_id: run.id,
       cliente_id: auto.cliente_id,
@@ -115,11 +135,12 @@ Deno.serve(async (req) => {
     const cliente = (auto as unknown as { clientes: { nome: string; empresa: string | null } }).clientes;
     const clienteLabel = cliente ? `${cliente.nome}${cliente.empresa ? ` (${cliente.empresa})` : ""}` : "?";
     await sendAlertEmail(
-      `🔴 ERRO: ${auto.nome} — ${clienteLabel}`,
+      `🔴 ERRO: ${auto.nome} — ${clienteLabel}`.replace(/[\r\n]+/g, " "),
       `<h2>Automação falhou</h2>
-       <p><b>Cliente:</b> ${clienteLabel}</p>
-       <p><b>Automação:</b> ${auto.nome}</p>
-       <p><b>Mensagem:</b> ${mensagem ?? "(sem mensagem)"}</p>
+       <p><b>Cliente:</b> ${escapeHtml(clienteLabel)}</p>
+       <p><b>Automação:</b> ${escapeHtml(auto.nome)}</p>
+       <p><b>Mensagem:</b></p>
+       <pre style="white-space:pre-wrap">${escapeHtml(mensagem ?? "(sem mensagem)")}</pre>
        <p>Incidente criado — assumir no backoffice: https://www.logicale.pt/backoffice/</p>`,
     );
   }

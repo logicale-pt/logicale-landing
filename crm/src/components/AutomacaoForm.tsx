@@ -82,8 +82,28 @@ export function erroPeriodica(d: AutomacaoDraft): string | null {
   return null;
 }
 
+export const TOLERANCIA_MAX = 720;
+
+/** Mensagem de erro da tolerância, ou null se estiver válida (custom não tem tolerância). */
+export function erroTolerancia(d: AutomacaoDraft): string | null {
+  if (d.schedule_tipo === 'custom') return null;
+  const n = Number(d.tolerancia_min);
+  if (!Number.isInteger(n) || n < 1 || n > TOLERANCIA_MAX) return `A tolerância tem de estar entre 1 e ${TOLERANCIA_MAX} minutos.`;
+  return null;
+}
+
+/** Hora (HH:MM) do prazo do dia seguinte, se hora esperada + tolerância passar da meia-noite. */
+function prazoDiaSeguinte(d: AutomacaoDraft): string | null {
+  if (d.schedule_tipo === 'custom' || d.schedule_tipo === 'periodica' || !d.hora_esperada || erroTolerancia(d)) return null;
+  const [h, m] = d.hora_esperada.split(':').map((n) => parseInt(n, 10));
+  const fim = h * 60 + m + Number(d.tolerancia_min);
+  if (fim < 24 * 60) return null;
+  const r = fim - 24 * 60;
+  return `${String(Math.floor(r / 60)).padStart(2, '0')}:${String(r % 60).padStart(2, '0')}`;
+}
+
 export function draftValido(d: AutomacaoDraft): boolean {
-  return d.nome.trim().length > 0 && parseFloat(d.preco_mensal) >= 0 && d.preco_mensal !== '' && !erroPeriodica(d);
+  return d.nome.trim().length > 0 && parseFloat(d.preco_mensal) >= 0 && d.preco_mensal !== '' && !erroPeriodica(d) && !erroTolerancia(d);
 }
 
 export default function AutomacaoFields({
@@ -168,7 +188,7 @@ export default function AutomacaoFields({
             <div className="field">
               <label>Tolerância (min)</label>
               <input
-                type="number" min="5" step="5"
+                type="number" min="1" max={TOLERANCIA_MAX} step="5"
                 value={draft.tolerancia_min}
                 onChange={(e) => set({ tolerancia_min: e.target.value })}
               />
@@ -176,6 +196,12 @@ export default function AutomacaoFields({
           </>
         )}
       </div>
+      {erroTolerancia(draft) && <p className="error-msg" style={{ margin: '-4px 0 10px' }}>{erroTolerancia(draft)}</p>}
+      {prazoDiaSeguinte(draft) && (
+        <p className="small muted" style={{ margin: '-4px 0 10px' }}>
+          O prazo passa da meia-noite: se não houver ping, o alerta chega no dia seguinte às {prazoDiaSeguinte(draft)} (+ até 15 min do ciclo de verificação).
+        </p>
+      )}
       {draft.schedule_tipo === 'periodica' && <JanelaPeriodica draft={draft} set={set} />}
     </>
   );

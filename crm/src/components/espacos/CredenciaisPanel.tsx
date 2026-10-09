@@ -20,6 +20,18 @@ function gerarPassword(n = 20): string {
   return Array.from(r, (x) => abc[x % abc.length]).join('');
 }
 
+// Passwords copiadas saem do clipboard ao fim de 45 s (como num gestor de passwords).
+// Só limpa se a última cópia feita aqui ainda for a mais recente — não apaga o que se copiou depois nesta página.
+const LIMPAR_CLIPBOARD_MS = 45_000;
+let ultimaCopia = 0;
+function copiarSegredo(texto: string): Promise<void> {
+  const minha = ++ultimaCopia;
+  setTimeout(() => {
+    if (minha === ultimaCopia) navigator.clipboard.writeText('').catch(() => {});
+  }, LIMPAR_CLIPBOARD_MS);
+  return navigator.clipboard.writeText(texto);
+}
+
 function useCofreDesbloqueado(): boolean {
   const [v, setV] = useState(desbloqueado());
   useEffect(() => onCofreChange(() => setV(desbloqueado())), []);
@@ -45,6 +57,16 @@ function CofreGate({ cofre, onCriado }: { cofre: Cofre | null; onCriado: () => v
       } else {
         if (frase.length < 12) return setErro('Usa pelo menos 12 caracteres (uma frase curta é ótimo).');
         if (frase !== confirmar) return setErro('As frases-passe não coincidem.');
+        // Sem linha no cofre mas com segredos cifrados ⇒ o cofre antigo foi apagado. Um cofre novo
+        // teria outra chave e esses segredos ficariam ilegíveis — repor o cofre antigo em vez disso.
+        const { count, error: cErr } = await supabase
+          .from('credenciais')
+          .select('id', { count: 'exact', head: true })
+          .not('segredo', 'is', null);
+        if (cErr) return setErro('Não foi possível verificar as credenciais existentes. Tenta outra vez.');
+        if ((count ?? 0) > 0) {
+          return setErro(`Há ${count} credenciais cifradas com um cofre anterior, cuja configuração desapareceu da base de dados. Repõe a linha da tabela "cofre" (backup) em vez de criar um cofre novo.`);
+        }
         const params = await criarCofre(frase);
         const { error } = await supabase.from('cofre').insert({ id: 1, ...params });
         if (error) {
@@ -119,7 +141,7 @@ function LinhaCredencial({ c, onEditar, onApagar }: { c: Credencial; onEditar: (
 
   async function copiar(texto: string | undefined | null, o: string) {
     if (!texto) return;
-    await navigator.clipboard.writeText(texto);
+    await (o === 'p' ? copiarSegredo(texto) : navigator.clipboard.writeText(texto));
     setCopiado(o);
     setTimeout(() => setCopiado(null), 1400);
   }
@@ -186,10 +208,13 @@ interface Draft {
   notas: string;
 }
 
+/** ilegivel: o segredo guardado não decifra com esta chave — guardar sem escrever um novo mantém-no. */
+type FormCred = { id: string | null; draft: Draft; ilegivel?: boolean };
+
 export default function CredenciaisPanel({ clienteId, eu, onCount }: { clienteId: string | null; eu: string; onCount?: (n: number) => void }) {
   const [cofre, setCofre] = useState<Cofre | null | undefined>(undefined);
   const [creds, setCreds] = useState<Credencial[]>([]);
-  const [form, setForm] = useState<{ id: string | null; draft: Draft } | null>(null);
+  const [form, setForm] = useState<FormCred | null>(null);
   const [verPass, setVerPass] = useState(false);
   const aberto = useCofreDesbloqueado();
   const onCountRef = useRef(onCount);
@@ -213,26 +238,28 @@ export default function CredenciaisPanel({ clienteId, eu, onCount }: { clienteId
 
   async function abrirEdicao(c: Credencial) {
     let s: Segredo = { password: '', notas: '' };
+    let ilegivel = false;
     if (c.segredo) {
       try {
         s = await decifrarSegredo(c.segredo);
       } catch {
-        /* segredo ilegível: deixa vazio para regravar */
+        ilegivel = true; // não se mostra, mas também não se apaga ao guardar (ver guardar)
       }
     }
     setVerPass(false);
-    setForm({ id: c.id, draft: { servico: c.servico, url: c.url ?? '', utilizador: c.utilizador ?? '', password: s.password, notas: s.notas } });
+    setForm({ id: c.id, ilegivel, draft: { servico: c.servico, url: c.url ?? '', utilizador: c.utilizador ?? '', password: s.password, notas: s.notas } });
   }
 
   async function guardar() {
     if (!form || !form.draft.servico.trim()) return;
     const d = form.draft;
+    const manterSegredo = form.ilegivel && !d.password && !d.notas;
     const segredo = d.password || d.notas ? await cifrarSegredo({ password: d.password, notas: d.notas }) : null;
     const linha = {
       servico: d.servico.trim(),
       url: d.url.trim() || null,
       utilizador: d.utilizador.trim() || null,
-      segredo,
+      ...(manterSegredo ? {} : { segredo }),
       updated_by: eu,
       updated_at: new Date().toISOString(),
     };
@@ -298,6 +325,11 @@ export default function CredenciaisPanel({ clienteId, eu, onCount }: { clienteId
             <label>Utilizador / email</label>
             <input value={d.utilizador} onChange={(e) => setD({ utilizador: e.target.value })} autoComplete="off" />
           </div>
+          {form.ilegivel && (
+            <p className="error-msg" style={{ marginTop: 0 }}>
+              A password guardada não decifra com a chave deste cofre. Se não escreveres uma nova, a atual fica como está.
+            </p>
+          )}
           <div className="field">
             <label>Password / token</label>
             <div className="input-group">
