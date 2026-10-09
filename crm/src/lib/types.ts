@@ -102,3 +102,55 @@ export interface Mensalidade {
   cliente_estado: ClienteEstado;
   mensalidade: number;
 }
+
+// ---------- espaços (notas, custos, credenciais) ----------
+// cliente_id = null ⇒ espaço interno da LOGICALE
+
+export type NotaTipo = 'nota' | 'ideia' | 'reuniao';
+export type CustoCategoria = 'ferramenta' | 'ia' | 'infraestrutura' | 'servico' | 'outro';
+export type CustoPeriodicidade = 'mensal' | 'anual' | 'unico';
+
+export interface Nota {
+  id: string;
+  cliente_id: string | null;
+  titulo: string;
+  conteudo: string;
+  tipo: NotaTipo;
+  fixada: boolean;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Custo {
+  id: string;
+  cliente_id: string | null;
+  descricao: string;
+  ferramenta: string | null;
+  categoria: CustoCategoria;
+  valor: number;
+  periodicidade: CustoPeriodicidade;
+  data_inicio: string;
+  data_fim: string | null;
+  notas: string | null;
+  created_at: string;
+}
+
+export interface Credencial {
+  id: string;
+  cliente_id: string | null;
+  servico: string;
+  url: string | null;
+  utilizador: string | null;
+  segredo: string | null; // ciphertext (ver lib/cofre.ts)
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Cofre {
+  id: number;
+  salt: string;
+  iteracoes: number;
+  verificador: string;
+}

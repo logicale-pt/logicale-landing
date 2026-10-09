@@ -6,8 +6,13 @@ import './styles.css';
 
 applyTheme(getTheme()); // antes do render, para não piscar
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+async function arrancar() {
+  // dev local com dados fictícios (npm run dev:mock) — este ramo nem existe no build de produção
+  if (import.meta.env.DEV && import.meta.env.VITE_MOCK === '1') (await import('./lib/mock')).installMock();
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+arrancar();

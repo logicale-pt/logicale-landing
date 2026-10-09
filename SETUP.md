@@ -79,3 +79,25 @@ curl -s -X POST "$PING" -H "Authorization: Bearer $TOKEN" -H "Content-Type: appl
 6. **MISSED simulado**: edita uma automação para hora esperada ~2h no passado (tolerância 5 min) e sem runs hoje; espera o próximo ciclo do cron (≤15 min) → run `missed` + incidente. (Ou força já: `curl -X POST .../functions/v1/check-missed -H "x-cron-secret: <CRON_SECRET>"`.)
 7. **Financeiro**: regista o mês do cliente Teste (valor editável, default 150€) → marcar pago → muda o preço de uma automação → o mês registado **não muda** (snapshot), a mensalidade derivada sim.
 8. Apaga/desativa o cliente de teste no fim (automações: desativar; o histórico fica).
+
+## 5. Espaços — notas, custos e credenciais (out 2026)
+
+Aba **Espaços** no backoffice: um espaço interno (LOGICALE) + um por cliente, cada um com
+**Notas & ideias** (páginas estilo Notion, autosave), **Custos** (mensal / anual / único) e **Credenciais**.
+O Dashboard passou a mostrar custos/mês, margem (MRR − custos) e um donut por cliente ou por ferramenta.
+
+### 5.1 SQL (uma vez)
+SQL Editor → cola e corre `supabase/migrations/20261009000000_espacos.sql`
+(tabelas `notas`, `custos`, `credenciais`, `cofre`, com a mesma RLS do resto do CRM).
+Até isso estar feito, a aba mostra um aviso e o Dashboard mostra "—" nos custos; nada parte.
+
+### 5.2 Cofre de credenciais
+- As passwords são **cifradas no browser** (AES-256-GCM, chave derivada por PBKDF2-SHA256 com 310 000 iterações)
+  antes de irem para a BD. A base de dados só vê texto cifrado; nem quem tiver acesso ao dashboard da Supabase as consegue ler.
+- Na primeira vez, um de vocês cria a **frase-passe do cofre** (partilhada entre os dois). Ela nunca é guardada:
+  **se a perderem, as passwords guardadas ficam irrecuperáveis.** Guardem-na num sítio seguro fora do CRM.
+- O cofre bloqueia sozinho após 10 min sem uso e ao recarregar a página.
+
+### 5.3 Desenvolver sem tocar em produção
+`cd crm && npm run dev:mock` → abre o backoffice com dados fictícios em memória e sessão falsa
+(sem login, sem pedidos à Supabase). O mock não entra no build (`npm run build`).

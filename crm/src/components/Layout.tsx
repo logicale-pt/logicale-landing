@@ -8,6 +8,7 @@ import {
   IconClientes,
   IconDashboard,
   IconDefinicoes,
+  IconEspacos,
   IconFinanceiro,
   IconKanban,
   IconLeads,
@@ -45,6 +46,7 @@ export default function Layout({ session }: { session: Session }) {
     { to: '/leads', label: 'Leads', icon: <IconLeads /> },
     { to: '/clientes', label: 'Clientes', icon: <IconClientes /> },
     { to: '/kanban', label: 'Kanban', icon: <IconKanban /> },
+    { to: '/espacos', label: 'Espaços', icon: <IconEspacos /> },
     { to: '/financeiro', label: 'Financeiro', icon: <IconFinanceiro /> },
     { to: '/monitorizacao', label: 'Monitorização', icon: <IconMonitorizacao />, badge: true },
   ];

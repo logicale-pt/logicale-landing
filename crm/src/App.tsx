@@ -14,6 +14,7 @@ import Financeiro from './pages/Financeiro';
 import Monitorizacao from './pages/Monitorizacao';
 import AutomacaoDetalhe from './pages/AutomacaoDetalhe';
 import Definicoes from './pages/Definicoes';
+import Espacos from './pages/Espacos';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -44,6 +45,8 @@ export default function App() {
           <Route path="financeiro" element={<Financeiro />} />
           <Route path="monitorizacao" element={<Monitorizacao session={session} />} />
           <Route path="monitorizacao/:id" element={<AutomacaoDetalhe />} />
+          <Route path="espacos" element={<Espacos session={session} />} />
+          <Route path="espacos/:espaco" element={<Espacos session={session} />} />
           <Route path="definicoes" element={<Definicoes session={session} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

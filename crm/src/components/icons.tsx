@@ -60,6 +60,13 @@ export const IconFinanceiro = () => (
   </I>
 );
 
+export const IconEspacos = () => (
+  <I>
+    <path d="M3 1.5 H10 L13 4.5 V14.5 H3 Z" />
+    <path d="M10 1.5 V4.5 H13 M5.5 8 H10.5 M5.5 10.5 H9" />
+  </I>
+);
+
 export const IconMonitorizacao = () => (
   <I>
     <path d="M1.5 8 H4.5 L6.5 3.5 L9.5 12.5 L11.5 8 H14.5" />

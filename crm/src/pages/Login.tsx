@@ -20,6 +20,17 @@ export default function Login() {
 
   return (
     <div className="login-wrap">
+      <svg className="login-lam" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="login-lamg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#C2693B" stopOpacity="0.13" />
+            <stop offset="0.75" stopColor="#C2693B" stopOpacity="0.03" />
+            <stop offset="1" stopColor="#C2693B" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d="M-40 980 Q330 430 600 -120 Q870 430 1240 980" fill="none" stroke="url(#login-lamg)" strokeWidth="70" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M-40 980 Q330 430 600 -120 Q870 430 1240 980" fill="none" stroke="rgba(194,105,59,0.22)" strokeWidth="1" />
+      </svg>
       <form className="login-box panel" onSubmit={onSubmit}>
         <div className="brand">
           <Logotype />

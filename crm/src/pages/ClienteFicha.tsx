@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { notifyIncidentesChanged } from '../components/Layout';
 import { fmtEUR, generatePingToken, scheduleLabel, sha256Hex, todayISO } from '../lib/utils';
@@ -19,6 +19,7 @@ interface ContagemApagar {
   runs: number;
   incidentes: number;
   pagamentos: number;
+  espaco: number; // notas + custos + credenciais (apagados em cascata)
 }
 
 export default function ClienteFicha() {
@@ -123,18 +124,22 @@ export default function ClienteFicha() {
   async function prepararApagar() {
     if (!cliente) return;
     const autoIds = automacoes.map((a) => a.id);
-    const [runs, incidentes, pagamentos] = await Promise.all([
+    const [runs, incidentes, pagamentos, notas, custos, creds] = await Promise.all([
       autoIds.length
         ? supabase.from('runs').select('id', { count: 'exact', head: true }).in('automacao_id', autoIds)
         : Promise.resolve({ count: 0 }),
       supabase.from('incidentes').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id),
       supabase.from('pagamentos').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id),
+      supabase.from('notas').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id),
+      supabase.from('custos').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id),
+      supabase.from('credenciais').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id),
     ]);
     setApagar({
       automacoes: automacoes.length,
       runs: runs.count ?? 0,
       incidentes: incidentes.count ?? 0,
       pagamentos: pagamentos.count ?? 0,
+      espaco: (notas.count ?? 0) + (custos.count ?? 0) + (creds.count ?? 0),
     });
   }
 
@@ -173,9 +178,15 @@ export default function ClienteFicha() {
 
   return (
     <>
-      <h1>
-        {cliente.nome} <span className={`tag ${cliente.estado}`}>{cliente.estado}</span>
-      </h1>
+      <div className="page-head">
+        <div>
+          <div className="eyebrow"><Link to="/clientes">Clientes</Link></div>
+          <h1>
+            {cliente.nome} <span className={`tag ${cliente.estado}`}>{cliente.estado}</span>
+          </h1>
+        </div>
+        <Link className="btn" to={`/espacos/${cliente.id}`}>Abrir espaço →</Link>
+      </div>
 
       <div className="grid cols-2">
         <div className="panel">
@@ -306,6 +317,7 @@ export default function ClienteFicha() {
             <li>{apagar.runs} runs de histórico</li>
             <li>{apagar.incidentes} incidentes</li>
             <li>{apagar.pagamentos} pagamentos registados</li>
+            {apagar.espaco > 0 && <li>{apagar.espaco} notas, custos e credenciais do espaço do cliente</li>}
           </ul>
           <p className="small muted">
             As tarefas do kanban ficam, mas perdem a associação ao cliente. Esta ação não tem desfazer —

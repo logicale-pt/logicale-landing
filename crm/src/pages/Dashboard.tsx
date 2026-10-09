@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { fmtDateTime, fmtEUR, timeAgo } from '../lib/utils';
-import type { Incidente, Mensalidade, Pagamento, Run } from '../lib/types';
+import { fmtDateTime, fmtEUR, monthISO, monthLabel, timeAgo } from '../lib/utils';
+import { custoRecorrenteMensal, somaMes } from '../lib/custos';
+import { ESPACO_INTERNO, tabelaEmFalta } from '../lib/espacos';
+import type { Cliente, Custo, Incidente, Mensalidade, Pagamento, Run } from '../lib/types';
+import Donut, { dobrarFatias } from '../components/Donut';
 
 type IncidenteRow = Incidente & {
   clientes: { nome: string } | null;
@@ -10,6 +13,7 @@ type IncidenteRow = Incidente & {
 };
 type RunRow = Run & { automacoes: { nome: string; clientes: { nome: string } | null } | null };
 type PagamentoRow = Pagamento & { clientes: { nome: string } | null };
+type Vista = 'cliente' | 'ferramenta';
 
 export default function Dashboard() {
   const [incidentes, setIncidentes] = useState<IncidenteRow[]>([]);
@@ -17,11 +21,15 @@ export default function Dashboard() {
   const [mrr, setMrr] = useState(0);
   const [numClientes, setNumClientes] = useState<number | null>(null);
   const [atrasados, setAtrasados] = useState<PagamentoRow[]>([]);
+  const [custos, setCustos] = useState<Custo[] | null>(null); // null = tabela ainda não existe
+  const [clientes, setClientes] = useState<Pick<Cliente, 'id' | 'nome' | 'created_at'>[]>([]);
+  const [vista, setVista] = useState<Vista>('cliente');
+  const mes = monthISO();
 
   useEffect(() => {
     (async () => {
       const desde = new Date(Date.now() - 24 * 3600_000).toISOString();
-      const [inc, rn, mens, pag] = await Promise.all([
+      const [inc, rn, mens, pag, cst, cls] = await Promise.all([
         supabase
           .from('incidentes')
           .select('*, clientes(nome), runs(estado, mensagem, automacao_id, automacoes(nome))')
@@ -39,7 +47,11 @@ export default function Dashboard() {
           .select('*, clientes(nome)')
           .eq('estado', 'em_atraso')
           .order('mes', { ascending: false }),
+        supabase.from('custos').select('*'),
+        supabase.from('clientes').select('id, nome, created_at').order('created_at'),
       ]);
+      setCustos(tabelaEmFalta(cst.error) ? null : (cst.data as Custo[]) ?? []);
+      setClientes((cls.data as Pick<Cliente, 'id' | 'nome' | 'created_at'>[]) ?? []);
       setIncidentes((inc.data as IncidenteRow[]) ?? []);
       setRuns((rn.data as RunRow[]) ?? []);
       const mensT = (mens.data as Mensalidade[]) ?? [];
@@ -55,9 +67,47 @@ export default function Dashboard() {
 
   const porEstado = (e: string) => runs.filter((r) => r.estado === e).length;
 
+  // custos: recorrente/mês é o número comparável ao MRR; pontuais do mês à parte
+  const custoMensal = custos ? somaMes(custos, mes, true) : 0;
+  const pontuaisMes = custos ? somaMes(custos, mes) - custoMensal : 0;
+  const margem = mrr - custoMensal;
+
+  const fatias = (() => {
+    if (!custos) return [];
+    const recorrentes = custos.filter((c) => custoRecorrenteMensal(c, mes) > 0);
+    if (vista === 'cliente') {
+      // ordem estável: interno primeiro, depois clientes por antiguidade
+      const nomes = new Map(clientes.map((c) => [c.id, c.nome]));
+      const ordem = [ESPACO_INTERNO, ...clientes.map((c) => c.id)];
+      const soma = new Map<string, number>();
+      for (const c of recorrentes) {
+        const k = c.cliente_id ?? ESPACO_INTERNO;
+        soma.set(k, (soma.get(k) ?? 0) + custoRecorrenteMensal(c, mes));
+      }
+      return dobrarFatias(
+        ordem.map((k) => ({ key: k, label: k === ESPACO_INTERNO ? 'LOGICALE (interno)' : nomes.get(k) ?? '?', value: soma.get(k) ?? 0 })),
+      );
+    }
+    const soma = new Map<string, number>();
+    for (const c of recorrentes) {
+      const k = c.ferramenta?.trim() || 'Sem ferramenta';
+      soma.set(k, (soma.get(k) ?? 0) + custoRecorrenteMensal(c, mes));
+    }
+    return dobrarFatias(
+      [...soma.keys()].sort((a, b) => a.localeCompare(b, 'pt')).map((k) => ({ key: k, label: k, value: soma.get(k) ?? 0 })),
+    );
+  })();
+
+  const hoje = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
+
   return (
     <>
-      <h1>Dashboard</h1>
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">{hoje}</div>
+          <h1>Visão geral</h1>
+        </div>
+      </div>
 
       {numClientes === 0 && (
         <div className="panel" style={{ marginBottom: 14 }}>
@@ -71,26 +121,67 @@ export default function Dashboard() {
       )}
 
       <div className="grid cols-4">
-        <div className={`panel stat ${incidentes.length ? 'alert' : ''}`}>
-          <div className="num">{incidentes.length}</div>
-          <div className="lbl">Incidentes abertos</div>
-        </div>
-        <div className="panel stat">
+        <div className="panel stat hero-stat">
+          <div className="lbl">MRR · clientes ativos</div>
           <div className="num">{fmtEUR(mrr)}</div>
-          <div className="lbl">MRR (clientes ativos)</div>
         </div>
         <div className="panel stat">
-          <div className="num">{runs.length}</div>
-          <div className="lbl">
-            Runs últimas 24 h
+          <div className="lbl">Custos / mês</div>
+          <div className="num">{custos ? fmtEUR(custoMensal) : '—'}</div>
+          {custos && pontuaisMes > 0 && <div className="sub">+ {fmtEUR(pontuaisMes)} pontuais em {monthLabel(mes).split(' ')[0]}</div>}
+          {!custos && <div className="sub">corre a migração dos Espaços</div>}
+        </div>
+        <div className={`panel stat ${custos && margem < 0 ? 'alert' : ''}`}>
+          <div className="lbl">Margem / mês</div>
+          <div className="num">{custos ? fmtEUR(margem) : '—'}</div>
+          {custos && mrr > 0 && <div className="sub">{Math.round((margem / mrr) * 100)}% do MRR</div>}
+        </div>
+        <div className={`panel stat ${incidentes.length ? 'alert' : ''}`}>
+          <div className="lbl">Incidentes abertos</div>
+          <div className="num">{incidentes.length}</div>
+          {incidentes.length > 0 && <div className="sub"><Link to="/monitorizacao">ver na Monitorização →</Link></div>}
+        </div>
+      </div>
+
+      <div className="grid dash-split">
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <div className="panel-title">Para onde vai o dinheiro</div>
+              <div className="muted small">Custos recorrentes de {monthLabel(mes)}</div>
+            </div>
+            <div className="seg" role="group" aria-label="Agrupar custos">
+              <button type="button" className={vista === 'cliente' ? 'active' : ''} onClick={() => setVista('cliente')}>Por cliente</button>
+              <button type="button" className={vista === 'ferramenta' ? 'active' : ''} onClick={() => setVista('ferramenta')}>Por ferramenta</button>
+            </div>
+          </div>
+          {fatias.length > 0 ? (
+            <Donut fatias={fatias} centroLabel="por mês" />
+          ) : (
+            <div className="empty">
+              <p>{custos ? 'Ainda não há custos registados.' : 'Falta criar as tabelas dos Espaços.'}</p>
+              {custos && <Link className="btn primary" to={`/espacos/${ESPACO_INTERNO}?aba=custos`}>Registar custos</Link>}
+            </div>
+          )}
+        </div>
+
+        <div className="grid" style={{ alignContent: 'start' }}>
+          <div className="panel stat">
+            <div className="lbl">Runs últimas 24 h</div>
+            <div className="num">{runs.length}</div>
             {runs.length > 0 && (
-              <span> — {porEstado('ok')} ok · {porEstado('erro')} erro · {porEstado('missed')} missed</span>
+              <div className="run-mix">
+                <span><span className="dot ok" /> {porEstado('ok')} ok</span>
+                <span><span className="dot erro" /> {porEstado('erro')} erro</span>
+                <span><span className="dot missed" /> {porEstado('missed')} missed</span>
+              </div>
             )}
           </div>
-        </div>
-        <div className={`panel stat ${atrasados.length ? 'alert' : ''}`}>
-          <div className="num">{atrasados.length}</div>
-          <div className="lbl">Pagamentos em atraso</div>
+          <div className={`panel stat ${atrasados.length ? 'alert' : ''}`}>
+            <div className="lbl">Pagamentos em atraso</div>
+            <div className="num">{atrasados.length}</div>
+            <div className="sub"><Link to="/financeiro">abrir Financeiro →</Link></div>
+          </div>
         </div>
       </div>
 
