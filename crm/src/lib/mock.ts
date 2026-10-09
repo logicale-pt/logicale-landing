@@ -173,6 +173,9 @@ function automacoesSaude(db: DB): Row[] {
   });
 }
 
+/** Defaults de colunas (como na BD) que o código não envia no insert. */
+const DEFAULTS: Record<string, Row> = { cofre: { versao: 1 } };
+
 const VIEWS: Record<string, (db: DB) => Row[]> = { mensalidades, runs_diarias: runsDiarias, automacoes_saude: automacoesSaude };
 
 // simular migrações por correr: VITE_MOCK_SEM=runs_diarias,automacoes_saude npm run dev:mock
@@ -224,7 +227,7 @@ class Query implements PromiseLike<{ data: unknown; error: unknown; count?: numb
 
     if (this.modo === 'insert') {
       const linhas = (Array.isArray(this.payload) ? this.payload : [this.payload!]).map((p) => ({
-        id: uid(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...p,
+        id: uid(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...DEFAULTS[this.table], ...p,
       }));
       t.push(...linhas);
       const data = this.selecionarDepois ? (this.um ? linhas[0] : linhas) : null;
@@ -277,5 +280,23 @@ export function installMock(): void {
   s.auth.onAuthStateChange = () => ({ data: { subscription: { unsubscribe() {} } } });
   s.auth.signOut = async () => { location.reload(); return { error: null }; };
   s.auth.updateUser = async () => ({ data: {}, error: null });
+  // mudar_frase_cofre: mesmas verificações que a função SQL (versão + lista completa), tudo ou nada
+  s.rpc = async (fn: string, args: Record<string, unknown>) => {
+    await new Promise((r) => setTimeout(r, 60));
+    if (fn !== 'mudar_frase_cofre') return { data: null, error: { message: `função ${fn} não existe no mock` } };
+    const cofre = (db.cofre ??= [])[0];
+    if (!cofre) return { data: null, error: { message: 'cofre_inexistente' } };
+    if (cofre.versao !== args.versao_atual) return { data: null, error: { message: 'cofre_versao_desatualizada' } };
+    const segredos = args.segredos as { id: string; segredo: string }[];
+    const cifradas = (db.credenciais ??= []).filter((c) => c.segredo != null);
+    const ids = new Set(segredos.map((x) => x.id));
+    if (ids.size !== cifradas.length || segredos.length !== cifradas.length || !cifradas.every((c) => ids.has(String(c.id)))) {
+      return { data: null, error: { message: 'segredos_incompletos' } };
+    }
+    const nova = Number(cofre.versao) + 1;
+    Object.assign(cofre, { salt: args.novo_salt, iteracoes: args.novas_iteracoes, verificador: args.novo_verificador, versao: nova });
+    for (const x of segredos) Object.assign(cifradas.find((c) => c.id === x.id)!, { segredo: x.segredo, cofre_versao: nova });
+    return { data: nova, error: null };
+  };
   console.info('%c[LOGICALE] modo mock — dados fictícios em memória', 'color:#E0542A');
 }

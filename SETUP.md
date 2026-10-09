@@ -92,15 +92,42 @@ SQL Editor → cola e corre `supabase/migrations/20261009000000_espacos.sql`
 Até isso estar feito, a aba mostra um aviso e o Dashboard mostra "—" nos custos; nada parte.
 
 ### 5.2 Cofre de credenciais
-- As passwords são **cifradas no browser** (AES-256-GCM, chave derivada por PBKDF2-SHA256 com 310 000 iterações)
+- As passwords são **cifradas no browser** (AES-256-GCM, chave derivada por PBKDF2-SHA256: 600 000 iterações nos cofres
+  novos e depois de mudar a frase; o cofre original foi criado com 310 000 e continua válido)
   antes de irem para a BD. A base de dados só vê texto cifrado; nem quem tiver acesso ao dashboard da Supabase as consegue ler.
 - Na primeira vez, um de vocês cria a **frase-passe do cofre** (partilhada entre os dois). Ela nunca é guardada:
   **se a perderem, as passwords guardadas ficam irrecuperáveis.** Guardem-na num sítio seguro fora do CRM.
-- O cofre bloqueia sozinho após 10 min sem uso e ao recarregar a página.
+- O cofre bloqueia sozinho após 10 min sem uso, ao recarregar a página e ao sair da conta.
+- A frase-passe pode ser mudada sem perder nada — ver 5.4.
 
 ### 5.3 Desenvolver sem tocar em produção
 `cd crm && npm run dev:mock` → abre o backoffice com dados fictícios em memória e sessão falsa
 (sem login, sem pedidos à Supabase). O mock não entra no build (`npm run build`).
+
+### 5.4 Mudar a frase-passe do cofre
+Precisa da migração `20261012000000_cofre_mudar_frase.sql` (ver §8). Credenciais → cofre desbloqueado → **Mudar frase-passe**:
+frase atual + frase nova (≥ 12 caracteres). O browser decifra **todas** as passwords (de todos os espaços) com a frase atual,
+cifra-as com a nova e a BD grava tudo numa só transação — se algo falhar (frase atual errada, alguém a mexer nas
+credenciais ao mesmo tempo, rede), fica tudo como estava.
+
+- **Avisem-se antes.** No browser do outro sócio o cofre bloqueia e pede a frase nova; se ele estiver a meio de gravar
+  uma credencial com a frase antiga, a BD recusa (em vez de a deixar ilegível) e ele tem de a voltar a escrever.
+- **A frase antiga é precisa** para mudar. Sem ela não há forma de recuperar nada (por desenho).
+- Cada mudança guarda o estado anterior em `cofre_backup` (parâmetros + passwords cifradas com a chave antiga), só
+  acessível por SQL. Para **voltar atrás** (ex: perderam a frase nova mas sabem a antiga), no SQL Editor:
+  ```sql
+  select id, versao, created_at, jsonb_array_length(segredos) as credenciais from public.cofre_backup order by id desc;
+  begin;  -- troca <ID> pelo id do backup
+  update public.cofre c set salt = b.salt, iteracoes = b.iteracoes, verificador = b.verificador, versao = c.versao + 1
+    from public.cofre_backup b where b.id = <ID> and c.id = 1;
+  update public.credenciais cr set segredo = e->>'segredo', cofre_versao = (select versao from public.cofre where id = 1)
+    from public.cofre_backup b, jsonb_array_elements(b.segredos) e where b.id = <ID> and cr.id = (e->>'id')::uuid;
+  commit;
+  ```
+  A partir daí abre-se com a frase antiga. ⚠️ Credenciais criadas ou alteradas **depois** da mudança continuam cifradas com
+  a frase nova e ficam ilegíveis — reescrevam-nas.
+- Se mudaram a frase porque a antiga pode ter sido exposta, apaguem os backups (`delete from public.cofre_backup;`) —
+  eles abrem-se com a frase antiga — e mudem também as passwords das contas mais sensíveis.
 
 ## 6. Automações periódicas (out 2026)
 
@@ -137,9 +164,12 @@ só lê a última run e as runs do último dia, não é afetado pela limpeza.
 
 Ordem do deploy (cada passo funciona sozinho; nada parte se ficar a meio):
 
-1. **SQL Editor** → corre `supabase/migrations/20261011000000_audit_fixes.sql` (idempotente; não mexe em dados).
-   Cria `heartbeats`, limita o que a anon key pode escrever em `leads`/`events`, tira update/delete do `cofre`,
-   põe `runs_diarias` só de leitura e torna `token_hash` único (se houver duplicados avisa e salta esse passo).
+1. **SQL Editor** → corre, por esta ordem (ambas idempotentes; não mexem em dados):
+   - `supabase/migrations/20261011000000_audit_fixes.sql` — cria `heartbeats`, limita o que a anon key pode escrever em
+     `leads`/`events`, tira update/delete do `cofre`, põe `runs_diarias` só de leitura e torna `token_hash` único
+     (se houver duplicados avisa e salta esse passo).
+   - `supabase/migrations/20261012000000_cofre_mudar_frase.sql` — versão do cofre, função `mudar_frase_cofre`,
+     backups e o trigger que impede gravar passwords com uma frase antiga (§5.4). A frase atual continua a mesma.
 2. **Edge Functions** → substitui o código de `check-missed` e de `ping` pelos novos `index.ts` e faz deploy
    (manter "Enforce JWT verification" desligado).
 3. **Heartbeat externo (recomendado, grátis)**: cria um check em [healthchecks.io](https://healthchecks.io)
@@ -150,6 +180,7 @@ Ordem do deploy (cada passo funciona sozinho; nada parte se ficar a meio):
 
 Verificar:
 - `select * from public.heartbeats;` → `ultimo_ok` atualiza de 15 em 15 min.
+- `select versao, iteracoes from public.cofre;` → `1 | 310000` até mudarem a frase (depois `2 | 600000`).
 - `select status_code, count(*) from net._http_response where created > now() - interval '1 day' group by 1;` → só 200.
 - Repor o cofre (se alguma vez for preciso) passa a exigir SQL como `postgres` — de propósito: um cofre novo
   deixa ilegíveis as credenciais cifradas com o antigo.

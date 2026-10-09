@@ -168,6 +168,7 @@ export interface Credencial {
   url: string | null;
   utilizador: string | null;
   segredo: string | null; // ciphertext (ver lib/cofre.ts)
+  cofre_versao?: number | null; // versão da chave do cofre com que segredo foi cifrado
   updated_by: string | null;
   created_at: string;
   updated_at: string;
@@ -178,4 +179,5 @@ export interface Cofre {
   salt: string;
   iteracoes: number;
   verificador: string;
+  versao?: number; // sobe a cada mudança de frase-passe (ausente sem a migração 20261012000000)
 }
