@@ -37,7 +37,7 @@ interface Automacao {
   dia_semana: number | null;    // 0=domingo … 6=sábado
   intervalo_min: number | null; // periodica
   janela_inicio: string | null; // periodica, "HH:MM:SS" (null = 00:00)
-  janela_fim: string | null;    // periodica, "HH:MM:SS" (null = 23:59)
+  janela_fim: string | null;    // periodica, "HH:MM:SS", exclusivo (null = 24:00)
   so_dias_uteis: boolean;       // periodica
   tolerancia_min: number;
   created_at: string;
@@ -120,7 +120,7 @@ async function periodicMissedAt(a: Automacao, today: string, nowMin: number, dow
   if (passo <= 0) return null;
   if (a.so_dias_uteis && (dow === 0 || dow === 6)) return null;
   const ini = a.janela_inicio ? toMin(a.janela_inicio) : 0;
-  const fim = a.janela_fim ? toMin(a.janela_fim) : 24 * 60 - 1;
+  const fim = a.janela_fim ? toMin(a.janela_fim) : 24 * 60; // exclusivo: 09:00–18:00 → último às 17:45
   if (nowMin < ini) return null;
 
   const { data: last, error } = await supabase
@@ -145,7 +145,7 @@ async function periodicMissedAt(a: Automacao, today: string, nowMin: number, dow
       if (l.minutesOfDay >= ini - a.tolerancia_min) expected = Math.max(l.minutesOfDay + passo, ini);
     }
   }
-  if (expected > fim) return null; // não há mais execuções esperadas hoje
+  if (expected >= fim) return null; // não há mais execuções esperadas hoje
   return nowMin > expected + a.tolerancia_min ? expected : null;
 }
 

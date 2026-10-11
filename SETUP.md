@@ -131,7 +131,7 @@ credenciais ao mesmo tempo, rede), fica tudo como estava.
 
 ## 6. Automações periódicas (out 2026)
 
-Schedule **Periódica**: um ping a cada N minutos (5–720), opcionalmente só numa janela horária (ex: 09:00–18:00) e só em dias úteis.
+Schedule **Periódica**: um ping a cada N minutos (5–720), opcionalmente só numa janela horária e só em dias úteis. A hora de fim é **exclusiva**: 09:00–18:00 de 15 em 15 min espera pings das 09:00 às 17:45 (como um cron `*/15 9-17`).
 
 1. **SQL Editor** → corre `supabase/migrations/20261009010000_automacoes_periodicas.sql` (só acrescenta colunas; tem de correr **antes** do deploy do backoffice, senão gravar automações falha).
 2. **Edge Functions → check-missed** → substitui o código pelo novo `supabase/functions/check-missed/index.ts` e faz deploy (manter "Enforce JWT verification" desligado).

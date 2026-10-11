@@ -250,6 +250,18 @@ function JanelaPeriodica({ draft, set }: { draft: AutomacaoDraft; set: (p: Parti
 }
 
 function resumoPeriodica(d: AutomacaoDraft): string {
-  const janela = d.janela_inicio || d.janela_fim ? `, entre as ${d.janela_inicio || '00:00'} e as ${d.janela_fim || '24:00'}` : ', 24 h por dia';
-  return `a cada ${fmtIntervalo(parseInt(d.intervalo_min, 10) || 0)}${janela}${d.so_dias_uteis ? ', só em dias úteis' : ''}`;
+  const passo = parseInt(d.intervalo_min, 10) || 0;
+  const janela = d.janela_inicio || d.janela_fim ? `, das ${d.janela_inicio || '00:00'} às ${d.janela_fim || '24:00'}${ultimoSlot(d, passo)}` : ', 24 h por dia';
+  return `a cada ${fmtIntervalo(passo)}${janela}${d.so_dias_uteis ? ', só em dias úteis' : ''}`;
+}
+
+/** A hora de fim é exclusiva: 09:00–18:00 de 15 em 15 → último ping esperado às 17:45. */
+function ultimoSlot(d: AutomacaoDraft, passo: number): string {
+  if (passo <= 0) return '';
+  const toMin = (h: string) => parseInt(h.slice(0, 2), 10) * 60 + parseInt(h.slice(3, 5), 10);
+  const ini = d.janela_inicio ? toMin(d.janela_inicio) : 0;
+  const fim = d.janela_fim ? toMin(d.janela_fim) : 24 * 60;
+  if (fim <= ini) return '';
+  const ultimo = ini + Math.floor((fim - 1 - ini) / passo) * passo;
+  return ` (último às ${String(Math.floor(ultimo / 60)).padStart(2, '0')}:${String(ultimo % 60).padStart(2, '0')})`;
 }

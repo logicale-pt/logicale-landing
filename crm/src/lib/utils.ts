@@ -123,12 +123,12 @@ export function proximoEsperado(a: Omit<ScheduleCampos, 'tolerancia_min'> & Pick
     const passo = a.intervalo_min ?? 0;
     if (passo <= 0) return null;
     const ini = minutosDoDia(a.janela_inicio, 0);
-    const fim = minutosDoDia(a.janela_fim, 24 * 60 - 1); // janela inclui a hora de fim
+    const fim = minutosDoDia(a.janela_fim, 24 * 60); // hora de fim exclusiva (09:00–18:00 → último às 17:45)
     for (let i = 0; i < 8; i++) {
       const dia = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
       const dow = dia.getDay();
       if (a.so_dias_uteis && (dow === 0 || dow === 6)) continue;
-      for (let t = ini; t <= fim; t += passo) {
+      for (let t = ini; t < fim; t += passo) {
         const d = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), 0, t);
         if (d > now) return d;
       }

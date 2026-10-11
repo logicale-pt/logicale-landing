@@ -30,7 +30,7 @@ export interface Automacao {
   dia_semana: number | null; // 0=domingo … 6=sábado
   intervalo_min: number | null; // periodica: minutos entre execuções
   janela_inicio: string | null; // periodica: "HH:MM:SS", null = 00:00
-  janela_fim: string | null; // periodica: "HH:MM:SS", null = 24:00
+  janela_fim: string | null; // periodica: "HH:MM:SS", exclusivo; null = 24:00
   so_dias_uteis: boolean; // periodica
   tolerancia_min: number;
   ativa: boolean;
