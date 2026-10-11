@@ -60,9 +60,12 @@ export function timeAgo(iso: string | null | undefined): string {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
   if (s < 60) return 'agora';
   if (s < 3600) return `há ${Math.floor(s / 60)} min`;
-  if (s < 86400) return `há ${Math.floor(s / 3600)} h`;
-  if (s < 172800) return 'ontem';
-  if (s < 7 * 86400) return `há ${Math.floor(s / 86400)} dias`;
+  // a partir daqui conta por dias de calendário (09/10 visto a 11/10 é "há 2 dias", não "ontem")
+  const meiaNoite = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dias = Math.round((meiaNoite(new Date()) - meiaNoite(new Date(iso))) / 86_400_000);
+  if (dias === 0) return `há ${Math.floor(s / 3600)} h`;
+  if (dias === 1) return 'ontem';
+  if (dias < 7) return `há ${dias} dias`;
   return fmtDate(iso);
 }
 
